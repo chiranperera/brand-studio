@@ -46,17 +46,19 @@ export function QuestionCard({
         <p className="mono mt-1 text-[11px] text-ink-4">→ {question.field}</p>
       )}
 
-      <div className="mt-5">
+      {/* Freeze the answer area while the next question is generating, so
+          mid-generation clicks can't land on a question that's about to change. */}
+      <div className={`mt-5 transition-opacity ${busy ? "pointer-events-none select-none opacity-40" : ""}`} aria-disabled={busy}>
         <InputArea question={question} value={value} onChange={onChange} />
-      </div>
-
-      <div className="mt-4">
-        <input
-          className="input text-sm"
-          placeholder="Optional note…"
-          value={note}
-          onChange={(e) => onNote(e.target.value)}
-        />
+        <div className="mt-4">
+          <input
+            className="input text-sm"
+            placeholder="Optional note…"
+            value={note}
+            onChange={(e) => onNote(e.target.value)}
+            disabled={busy}
+          />
+        </div>
       </div>
 
       <div className="mt-5 flex items-center justify-between">
@@ -71,7 +73,7 @@ export function QuestionCard({
           )}
         </div>
         <button className="btn-primary" onClick={onSubmit} disabled={busy || empty}>
-          {busy ? "…" : "Next"}
+          {busy ? "Generating…" : "Next"}
         </button>
       </div>
     </div>
