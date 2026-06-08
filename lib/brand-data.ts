@@ -308,7 +308,10 @@ const REQUIRED: { label: string; ok: (b: BrandDataObject) => boolean }[] = [
   { label: "visualStyle.cluster", ok: (b) => !!b.visualStyle.cluster },
   { label: "imagery.mode", ok: (b) => b.imagery.mode.length > 0 },
   { label: "surfaces", ok: (b) => b.surfaces.length > 0 },
-  { label: "≥1 reference", ok: (b) => b.references.length > 0 },
+  // Reference images are intentionally NOT required: in a live discovery session
+  // the designer gathers inspiration/competitor/logo files afterwards. The
+  // session reaches 100% on the answers alone; references can be added later and
+  // included on re-export. (See references/ in the Design Pack — still emitted.)
 ];
 
 export function computeCompleteness(b: BrandDataObject): { score: number; missing: string[] } {

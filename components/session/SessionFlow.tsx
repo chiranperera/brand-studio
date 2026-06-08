@@ -236,12 +236,13 @@ export function SessionFlow({
   const refPanel = (
     <div className="card">
       <div className="mb-1 flex items-center justify-between">
-        <h3 className="font-medium">Reference images</h3>
+        <h3 className="font-medium">Reference images (optional)</h3>
         <span className="mono text-xs text-ink-4">{refCount} added</span>
       </div>
       <p className="mb-4 text-sm text-ink-3">
-        Upload inspiration, competitor screenshots, or the client&apos;s existing logo/photos — tag each love / like /
-        avoid. At least one is required for a complete pack.
+        Optional — and usually added later. After the session, gather inspiration, competitor screenshots, or the
+        client&apos;s logo/photos, tag each love / like / avoid, and re-export. You can do this now or anytime from the
+        project page.
       </p>
       <ReferenceUpload projectId={projectId} initialAssets={initialAssets} onReferencesChange={onRefsChange} />
     </div>
@@ -267,13 +268,11 @@ export function SessionFlow({
         {done ? (
           <>
             <div className="card text-center">
-              <h2 className="text-xl font-medium">Questions done — last step: references</h2>
+              <h2 className="text-xl font-medium">Session complete</h2>
               <p className="mt-2 text-sm text-ink-3">
                 {missing.length === 0
-                  ? "All required fields captured. You're ready to export a Design Pack."
-                  : refCount === 0
-                    ? "Add at least one reference image below to reach 100%, then export."
-                    : `${missing.length} required field(s) still missing — you can keep going or export with an override.`}
+                  ? "All discovery categories captured — you can export the Design Pack now. Everything is saved, so you can also come back later to add reference images and re-export."
+                  : `${missing.length} categor${missing.length === 1 ? "y is" : "ies are"} still open — keep going, or export with an override.`}
               </p>
               <div className="mt-5 flex justify-center gap-2">
                 <button
@@ -332,7 +331,7 @@ export function SessionFlow({
                   setDone(true);
                 }}
               >
-                Finish &amp; add references →
+                Finish session →
               </button>
             </div>
           )}

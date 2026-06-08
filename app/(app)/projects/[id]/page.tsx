@@ -65,10 +65,11 @@ export default async function ProjectOverview({ params }: { params: Promise<{ id
       </div>
 
       <div className="card">
-        <h2 className="mb-1 text-lg font-medium">References &amp; assets</h2>
+        <h2 className="mb-1 text-lg font-medium">References &amp; assets (optional)</h2>
         <p className="mb-4 text-sm text-ink-3">
-          The highest-signal input. Upload inspiration, competitor screenshots, and the client&apos;s existing assets — tag
-          each love / like / avoid.
+          The highest-signal input — usually gathered after the session. Add inspiration, competitor screenshots, and the
+          client&apos;s existing assets whenever you have them, tag each love / like / avoid, then re-export the Design
+          Pack. Not required to complete the session.
         </p>
         <ReferenceUpload projectId={id} initialAssets={assets ?? []} />
       </div>
