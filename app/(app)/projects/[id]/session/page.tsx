@@ -1,7 +1,17 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { emptyBrandData, withAssetReferences, type BrandDataObject } from "@/lib/brand-data";
-import { SessionFlow } from "@/components/session/SessionFlow";
+import type { InputType, Question } from "@/lib/question-engine";
+import { SessionFlow, type InitialAnswer } from "@/components/session/SessionFlow";
+import type { AnswerVal } from "@/components/session/InputArea";
+
+function toValue(answer: unknown): AnswerVal {
+  if (answer == null) return "";
+  if (Array.isArray(answer)) return answer.map(String);
+  if (typeof answer === "number") return answer;
+  if (typeof answer === "object") return "";
+  return String(answer);
+}
 
 export const dynamic = "force-dynamic";
 
@@ -33,10 +43,24 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
     session = created!;
   }
 
-  const { count } = await supabase
+  const { data: answerRows } = await supabase
     .from("answers")
-    .select("id", { count: "exact", head: true })
-    .eq("project_id", id);
+    .select("id, field_path, section, question, input_type, answer, note, position")
+    .eq("project_id", id)
+    .order("position", { ascending: true });
+
+  const initialAnswers: InitialAnswer[] = (answerRows ?? []).map((a) => ({
+    id: a.id as string,
+    question: {
+      section: a.section ?? "",
+      question: a.question as string,
+      inputType: (a.input_type as InputType) ?? "text",
+      field: a.field_path ?? undefined,
+      options: [],
+    } satisfies Question,
+    value: toValue(a.answer),
+    note: a.note ?? "",
+  }));
 
   const { data: assets } = await supabase
     .from("assets")
@@ -61,7 +85,7 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
         sessionId={session.id}
         mode={(session.mode as "ai" | "standard") ?? "ai"}
         initialBrandData={bd}
-        initialAnswered={count ?? 0}
+        initialAnswers={initialAnswers}
         initialAssets={assets ?? []}
       />
     </div>

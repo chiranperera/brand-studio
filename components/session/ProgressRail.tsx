@@ -10,7 +10,7 @@ export function ProgressRail({
   answered: number;
 }) {
   return (
-    <aside className="card sticky top-20 h-fit">
+    <aside className="card">
       <div className="mb-3 flex items-baseline justify-between">
         <span className="label mb-0">Completeness</span>
         <span className="mono text-lg font-semibold text-ink">{score}%</span>

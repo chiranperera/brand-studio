@@ -54,7 +54,11 @@ export function InputArea({
       );
 
     case "select": {
-      const opts = question.options ?? [];
+      const base = question.options ?? [];
+      // Include the current value as a chip even if it wasn't in the original
+      // options (e.g. revisiting an AI question whose options weren't stored).
+      const opts =
+        typeof value === "string" && value && !base.includes(value) ? [...base, value] : base;
       return (
         <div className="space-y-3">
           <div className="flex flex-wrap gap-2">
@@ -83,8 +87,11 @@ export function InputArea({
     }
 
     case "multiselect": {
-      const opts = question.options ?? [];
+      const base = question.options ?? [];
       const arr = Array.isArray(value) ? value : [];
+      // Show already-selected values as chips too, so revisited answers are
+      // visible and removable even when the original options weren't stored.
+      const opts = [...base, ...arr.filter((v) => !base.includes(v))];
       const toggle = (o: string) =>
         onChange(arr.includes(o) ? arr.filter((x) => x !== o) : [...arr, o]);
       return (
