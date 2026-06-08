@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { gemini, parseJson } from "@/lib/gemini";
 import { buildPrompt, QUESTION_SCHEMA, type Question, type HistoryItem } from "@/lib/question-engine";
-import { computeCompleteness, emptyBrandData, type BrandDataObject } from "@/lib/brand-data";
+import { computeCompleteness, emptyBrandData, withAssetReferences, type BrandDataObject } from "@/lib/brand-data";
 
 export const runtime = "nodejs";
 
@@ -38,8 +38,10 @@ export async function POST(req: Request) {
     answer: Array.isArray(a.answer) ? (a.answer as string[]).join(", ") : String(a.answer ?? ""),
   }));
 
+  const { data: assets } = await supabase.from("assets").select("kind").eq("project_id", projectId);
+
   const bd = (project.brand_data ?? {}) as BrandDataObject;
-  const merged = Object.keys(bd).length ? bd : emptyBrandData();
+  const merged = withAssetReferences(Object.keys(bd).length ? bd : emptyBrandData(), assets);
   const { missing } = computeCompleteness(merged);
 
   const prompt = buildPrompt({

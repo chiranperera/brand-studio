@@ -309,3 +309,21 @@ export function computeCompleteness(b: BrandDataObject): { score: number; missin
   const score = Math.round(((REQUIRED.length - missing.length) / REQUIRED.length) * 100);
   return { score, missing };
 }
+
+/**
+ * Uploaded references live in the `assets` table; mirror them into
+ * `brand_data.references` at read time so completeness reflects real uploads.
+ */
+type AssetRow = { kind?: string | null; source?: string | null; sentiment?: string | null; note?: string | null };
+export function withAssetReferences(b: BrandDataObject, assets: AssetRow[] | null | undefined): BrandDataObject {
+  if (!assets?.length) return b;
+  return {
+    ...b,
+    references: assets.map((a) => ({
+      type: a.kind ?? "upload",
+      source: a.source ?? undefined,
+      sentiment: (a.sentiment as Sentiment | undefined) ?? undefined,
+      note: a.note ?? undefined,
+    })),
+  };
+}

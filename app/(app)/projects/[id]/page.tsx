@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { computeCompleteness, emptyBrandData, type BrandDataObject } from "@/lib/brand-data";
+import { computeCompleteness, emptyBrandData, withAssetReferences, type BrandDataObject } from "@/lib/brand-data";
 import { ReferenceUpload } from "@/components/projects/ReferenceUpload";
 
 export const dynamic = "force-dynamic";
@@ -24,7 +24,7 @@ export default async function ProjectOverview({ params }: { params: Promise<{ id
     .order("created_at", { ascending: false });
 
   const raw = (project.brand_data ?? {}) as BrandDataObject;
-  const bd = Object.keys(raw).length ? raw : emptyBrandData();
+  const bd = withAssetReferences(Object.keys(raw).length ? raw : emptyBrandData(), assets);
   const { score, missing } = computeCompleteness(bd);
 
   return (

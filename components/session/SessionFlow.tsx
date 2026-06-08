@@ -9,7 +9,17 @@ import { writeField, type AnswerValue } from "@/lib/mapping";
 import { computeCompleteness, type BrandDataObject } from "@/lib/brand-data";
 import { QuestionCard } from "./QuestionCard";
 import { ProgressRail } from "./ProgressRail";
+import { ReferenceUpload } from "@/components/projects/ReferenceUpload";
 import type { AnswerVal } from "./InputArea";
+
+interface SessionAsset {
+  id: string;
+  kind: string;
+  source: string | null;
+  storage_path: string | null;
+  sentiment: string | null;
+  note: string | null;
+}
 
 export function SessionFlow({
   projectId,
@@ -17,12 +27,14 @@ export function SessionFlow({
   mode,
   initialBrandData,
   initialAnswered,
+  initialAssets,
 }: {
   projectId: string;
   sessionId: string;
   mode: "ai" | "standard";
   initialBrandData: BrandDataObject;
   initialAnswered: number;
+  initialAssets: SessionAsset[];
 }) {
   const [bd, setBd] = useState<BrandDataObject>(initialBrandData);
   const [current, setCurrent] = useState<Question | null>(null);
@@ -32,8 +44,28 @@ export function SessionFlow({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
+  const [showRefs, setShowRefs] = useState(false);
 
   const { score, missing } = computeCompleteness(bd);
+  const refCount = bd.references.length;
+
+  // Keep the live completeness rail in sync when references are uploaded.
+  const onRefsChange = (count: number) =>
+    setBd((b) => ({ ...b, references: Array.from({ length: count }, () => ({ type: "upload" })) }));
+
+  const refPanel = (
+    <div className="card">
+      <div className="mb-1 flex items-center justify-between">
+        <h3 className="font-medium">Reference images</h3>
+        <span className="mono text-xs text-ink-4">{refCount} added</span>
+      </div>
+      <p className="mb-4 text-sm text-ink-3">
+        Upload inspiration, competitor screenshots, or the client&apos;s existing logo/photos — tag each love / like /
+        avoid. At least one is required for a complete pack.
+      </p>
+      <ReferenceUpload projectId={projectId} initialAssets={initialAssets} onReferencesChange={onRefsChange} />
+    </div>
+  );
 
   const resetInput = () => {
     setValue("");
@@ -149,28 +181,33 @@ export function SessionFlow({
         )}
 
         {done ? (
-          <div className="card text-center">
-            <h2 className="text-xl font-medium">Session complete</h2>
-            <p className="mt-2 text-sm text-ink-3">
-              {missing.length === 0
-                ? "All required fields captured. You're ready to export a Design Pack."
-                : `${missing.length} required field(s) still missing — you can keep going or export with an override.`}
-            </p>
-            <div className="mt-5 flex justify-center gap-2">
-              <button
-                className="btn-ghost"
-                onClick={() => {
-                  setDone(false);
-                  void loadNext();
-                }}
-              >
-                Keep going
-              </button>
-              <Link className="btn-primary" href={`/projects/${projectId}/export`}>
-                Export Design Pack
-              </Link>
+          <>
+            <div className="card text-center">
+              <h2 className="text-xl font-medium">Questions done — last step: references</h2>
+              <p className="mt-2 text-sm text-ink-3">
+                {missing.length === 0
+                  ? "All required fields captured. You're ready to export a Design Pack."
+                  : refCount === 0
+                    ? "Add at least one reference image below to reach 100%, then export."
+                    : `${missing.length} required field(s) still missing — you can keep going or export with an override.`}
+              </p>
+              <div className="mt-5 flex justify-center gap-2">
+                <button
+                  className="btn-ghost"
+                  onClick={() => {
+                    setDone(false);
+                    void loadNext();
+                  }}
+                >
+                  Back to questions
+                </button>
+                <Link className="btn-primary" href={`/projects/${projectId}/export`}>
+                  Export Design Pack
+                </Link>
+              </div>
             </div>
-          </div>
+            {refPanel}
+          </>
         ) : current ? (
           <QuestionCard
             question={current}
@@ -188,19 +225,29 @@ export function SessionFlow({
           <div className="card text-ink-3">{busy ? "Generating the first question…" : "Loading…"}</div>
         )}
 
+        {/* Reference upload is reachable any time during the session, not only at the end. */}
+        {!done && showRefs && refPanel}
+
         <div className="flex items-center justify-between text-sm text-ink-4">
           <Link href={`/projects/${projectId}`} className="hover:text-ink">
             ← Project overview
           </Link>
-          <button
-            className="hover:text-ink"
-            onClick={() => {
-              setDone(true);
-              setCurrent(null);
-            }}
-          >
-            End session →
-          </button>
+          <div className="flex items-center gap-4">
+            {!done && (
+              <button className="hover:text-ink" onClick={() => setShowRefs((s) => !s)}>
+                📎 References ({refCount})
+              </button>
+            )}
+            <button
+              className="hover:text-ink"
+              onClick={() => {
+                setDone(true);
+                setCurrent(null);
+              }}
+            >
+              Finish & add references →
+            </button>
+          </div>
         </div>
       </div>
 

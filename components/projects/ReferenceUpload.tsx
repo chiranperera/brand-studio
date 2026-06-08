@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { computeCompleteness, emptyBrandData, type BrandDataObject } from "@/lib/brand-data";
 
 interface Asset {
   id: string;
@@ -21,7 +22,18 @@ const SENT_CLASS: Record<string, string> = {
   avoid: "text-red-300 border-red-500/40",
 };
 
-export function ReferenceUpload({ projectId, initialAssets }: { projectId: string; initialAssets: Asset[] }) {
+export function ReferenceUpload({
+  projectId,
+  initialAssets,
+  onReferencesChange,
+  compact = false,
+}: {
+  projectId: string;
+  initialAssets: Asset[];
+  /** Notifies a parent (e.g. the session) of the new reference list so its completeness can update live. */
+  onReferencesChange?: (count: number) => void;
+  compact?: boolean;
+}) {
   const router = useRouter();
   const [assets, setAssets] = useState<Asset[]>(initialAssets);
   const [kind, setKind] = useState("inspiration");
@@ -29,6 +41,35 @@ export function ReferenceUpload({ projectId, initialAssets }: { projectId: strin
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+
+  /**
+   * Keep brand_data.references (and completeness) in sync with the assets table,
+   * so the "≥1 reference" requirement is satisfied by an upload.
+   */
+  async function syncBrandReferences(list: Asset[]) {
+    const supabase = createClient();
+    const refs = list.map((a) => ({
+      type: a.kind,
+      source: a.source ?? undefined,
+      sentiment: (a.sentiment as "love" | "like" | "avoid" | undefined) ?? undefined,
+      note: a.note ?? undefined,
+    }));
+    const { data } = await supabase.from("projects").select("brand_data").eq("id", projectId).single();
+    const raw = (data?.brand_data ?? {}) as BrandDataObject;
+    const bd = Object.keys(raw).length ? raw : emptyBrandData();
+    bd.references = refs;
+    const c = computeCompleteness(bd);
+    bd.meta = { ...bd.meta, completeness: c.score, requiredMissing: c.missing };
+    await supabase
+      .from("projects")
+      .update({
+        brand_data: bd,
+        completeness: c.score,
+        status: c.missing.length === 0 ? "ready" : "discovery",
+      })
+      .eq("id", projectId);
+    onReferencesChange?.(refs.length);
+  }
 
   async function upload(file: File) {
     setBusy(true);
@@ -49,8 +90,10 @@ export function ReferenceUpload({ projectId, initialAssets }: { projectId: strin
       .single();
     if (error) setErr(error.message);
     else {
-      setAssets((a) => [data as Asset, ...a]);
+      const next = [data as Asset, ...assets];
+      setAssets(next);
       setNote("");
+      await syncBrandReferences(next);
       router.refresh();
     }
     setBusy(false);
@@ -60,7 +103,9 @@ export function ReferenceUpload({ projectId, initialAssets }: { projectId: strin
     const supabase = createClient();
     if (storagePath) await supabase.storage.from("references").remove([storagePath]);
     await supabase.from("assets").delete().eq("id", id);
-    setAssets((a) => a.filter((x) => x.id !== id));
+    const next = assets.filter((x) => x.id !== id);
+    setAssets(next);
+    await syncBrandReferences(next);
     router.refresh();
   }
 
@@ -87,10 +132,12 @@ export function ReferenceUpload({ projectId, initialAssets }: { projectId: strin
             ))}
           </select>
         </div>
-        <div className="min-w-40 flex-1">
-          <label className="label">Note</label>
-          <input className="input" value={note} onChange={(e) => setNote(e.target.value)} placeholder="Why this?" />
-        </div>
+        {!compact && (
+          <div className="min-w-40 flex-1">
+            <label className="label">Note</label>
+            <input className="input" value={note} onChange={(e) => setNote(e.target.value)} placeholder="Why this?" />
+          </div>
+        )}
         <label className="btn-primary cursor-pointer">
           {busy ? "Uploading…" : "Upload file"}
           <input

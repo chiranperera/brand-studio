@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { emptyBrandData, type BrandDataObject } from "@/lib/brand-data";
+import { emptyBrandData, withAssetReferences, type BrandDataObject } from "@/lib/brand-data";
 import { SessionFlow } from "@/components/session/SessionFlow";
 
 export const dynamic = "force-dynamic";
@@ -38,8 +38,17 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
     .select("id", { count: "exact", head: true })
     .eq("project_id", id);
 
+  const { data: assets } = await supabase
+    .from("assets")
+    .select("id, kind, source, storage_path, sentiment, note")
+    .eq("project_id", id)
+    .order("created_at", { ascending: false });
+
   const raw = (project.brand_data ?? {}) as BrandDataObject;
-  const bd = Object.keys(raw).length ? raw : emptyBrandData({ id, client: project.client_name });
+  const bd = withAssetReferences(
+    Object.keys(raw).length ? raw : emptyBrandData({ id, client: project.client_name }),
+    assets
+  );
 
   return (
     <div>
@@ -53,6 +62,7 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
         mode={(session.mode as "ai" | "standard") ?? "ai"}
         initialBrandData={bd}
         initialAnswered={count ?? 0}
+        initialAssets={assets ?? []}
       />
     </div>
   );

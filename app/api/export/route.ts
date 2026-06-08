@@ -7,7 +7,13 @@ import {
   type AssetFile,
   type ReferenceManifestItem,
 } from "@/lib/export/design-pack";
-import { brandDataSchema, computeCompleteness, emptyBrandData, type BrandDataObject } from "@/lib/brand-data";
+import {
+  brandDataSchema,
+  computeCompleteness,
+  emptyBrandData,
+  withAssetReferences,
+  type BrandDataObject,
+} from "@/lib/brand-data";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -36,8 +42,15 @@ export async function POST(req: Request) {
     .single();
   if (error || !project) return NextResponse.json({ error: "Project not found" }, { status: 404 });
 
+  // Load assets up front: they back both the completeness check (references) and
+  // the references/ folder in the pack.
+  const { data: assets } = await supabase
+    .from("assets")
+    .select("kind, source, storage_path, sentiment, note, extracted")
+    .eq("project_id", projectId);
+
   const raw = (project.brand_data ?? {}) as BrandDataObject;
-  const bd = Object.keys(raw).length ? raw : emptyBrandData();
+  const bd = withAssetReferences(Object.keys(raw).length ? raw : emptyBrandData(), assets);
 
   // Gate on completeness unless the host overrides.
   const { missing } = computeCompleteness(bd);
@@ -49,12 +62,6 @@ export async function POST(req: Request) {
 
   const date = new Date().toISOString().slice(0, 10);
   const admin = createAdminClient();
-
-  // Load assets and download their binaries from Storage.
-  const { data: assets } = await supabase
-    .from("assets")
-    .select("kind, source, storage_path, sentiment, note, extracted")
-    .eq("project_id", projectId);
 
   const references: ReferenceManifestItem[] = [];
   const assetFiles: AssetFile[] = [];
