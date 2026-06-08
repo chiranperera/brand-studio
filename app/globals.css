@@ -5,12 +5,37 @@
 :root {
   --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   --font-mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
+
+  /* Dark theme (default). Values are space-separated RGB channels. */
+  --bg: 10 10 11;
+  --panel: 20 20 22;
+  --panel2: 28 28 32;
+  --line: 42 42 48;
+  --ink: 255 255 255;
+  --ink-2: 201 201 207;
+  --ink-3: 138 138 147;
+  --ink-4: 90 90 99;
+  --accent: 198 255 58;
+  --on-accent: 10 10 11;
+}
+
+[data-theme="light"] {
+  --bg: 255 255 255;
+  --panel: 248 248 249;
+  --panel2: 240 240 242;
+  --line: 224 224 228;
+  --ink: 14 14 16;
+  --ink-2: 55 55 60;
+  --ink-3: 100 100 108;
+  --ink-4: 150 150 158;
+  --accent: 101 163 13;
+  --on-accent: 255 255 255;
 }
 
 html,
 body {
-  background: #0a0a0b;
-  color: #ffffff;
+  background: rgb(var(--bg));
+  color: rgb(var(--ink));
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
 }
@@ -20,7 +45,7 @@ body {
     @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors;
   }
   .btn-primary {
-    @apply btn bg-accent text-bg hover:opacity-90;
+    @apply btn bg-accent text-onAccent hover:opacity-90;
   }
   .btn-ghost {
     @apply btn border border-line text-ink-2 hover:bg-panel2 hover:text-ink;

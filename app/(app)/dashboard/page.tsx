@@ -4,11 +4,13 @@ import { NewProjectDialog } from "@/components/projects/NewProjectDialog";
 
 export const dynamic = "force-dynamic";
 
-const STATUS_LABEL: Record<string, string> = {
-  discovery: "In discovery",
-  ready: "Ready to export",
-  exported: "Exported",
-};
+/** A project is "Complete" once all discovery categories are captured (100%). */
+function statusBadge(completeness: number, status: string) {
+  if (completeness >= 100 || status === "exported") {
+    return { label: status === "exported" ? "Exported" : "Complete", cls: "border-accent/50 text-accent" };
+  }
+  return { label: "Draft", cls: "border-line text-ink-3" };
+}
 
 export default async function Dashboard() {
   const supabase = await createClient();
@@ -44,9 +46,10 @@ export default async function Dashboard() {
                   <span className="mono text-xs text-ink-3">{p.completeness}%</span>
                 </div>
                 <div className="mt-4 flex items-center justify-between text-xs">
-                  <span className="rounded-full border border-line px-2 py-0.5 text-ink-2">
-                    {STATUS_LABEL[p.status] ?? p.status}
-                  </span>
+                  {(() => {
+                    const b = statusBadge(p.completeness, p.status);
+                    return <span className={`rounded-full border px-2 py-0.5 font-medium ${b.cls}`}>{b.label}</span>;
+                  })()}
                   <span className="text-ink-4">{new Date(p.updated_at).toLocaleDateString()}</span>
                 </div>
               </Link>

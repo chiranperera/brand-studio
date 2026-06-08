@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { ThemeToggle } from "@/components/ThemeToggle";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createClient();
@@ -18,6 +19,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           </Link>
           <div className="flex items-center gap-4 text-sm text-ink-3">
             <span className="hidden sm:inline">{user.email}</span>
+            <ThemeToggle />
             <form action="/auth/signout" method="post">
               <button className="hover:text-ink" type="submit">
                 Sign out
