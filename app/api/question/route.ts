@@ -1,12 +1,33 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { gemini, parseJson } from "@/lib/gemini";
-import { buildPrompt, QUESTION_SCHEMA, type Question, type HistoryItem } from "@/lib/question-engine";
-import { computeCompleteness, emptyBrandData, withAssetReferences, type BrandDataObject } from "@/lib/brand-data";
+import {
+  buildPrompt,
+  QUESTION_SCHEMA,
+  availableFields,
+  requiredRemaining,
+  type Question,
+  type HistoryItem,
+} from "@/lib/question-engine";
+import { BANK } from "@/lib/question-bank";
 
 export const runtime = "nodejs";
 
-/** POST { projectId } → the next adaptive question (server-side Gemini). */
+const COMPLETE: Question = {
+  section: "Discovery",
+  question: "All set.",
+  inputType: "text",
+  interviewComplete: true,
+};
+
+/** Deterministic fallback question for a target field (uses the standard bank). */
+function fallbackQuestion(field: string): Question {
+  const fromBank = BANK.find((b) => b.field === field);
+  if (fromBank) return { ...fromBank, interviewComplete: false };
+  return { section: "Discovery", question: `Tell us more about ${field}.`, inputType: "text", field, interviewComplete: false };
+}
+
+/** POST { projectId } → the next adaptive question (server-side Gemini, deduped). */
 export async function POST(req: Request) {
   const supabase = await createClient();
   const {
@@ -17,18 +38,16 @@ export async function POST(req: Request) {
   const { projectId } = (await req.json()) as { projectId: string };
   if (!projectId) return NextResponse.json({ error: "Missing projectId" }, { status: 400 });
 
-  // Load the project (RLS ensures ownership).
   const { data: project, error: pErr } = await supabase
     .from("projects")
-    .select("client_name, contact_name, industry, brand_data")
+    .select("client_name, contact_name, industry")
     .eq("id", projectId)
     .single();
   if (pErr || !project) return NextResponse.json({ error: "Project not found" }, { status: 404 });
 
-  // Rebuild history from the answer log.
   const { data: answers } = await supabase
     .from("answers")
-    .select("section, question, answer")
+    .select("section, question, answer, field_path")
     .eq("project_id", projectId)
     .order("position", { ascending: true });
 
@@ -38,25 +57,55 @@ export async function POST(req: Request) {
     answer: Array.isArray(a.answer) ? (a.answer as string[]).join(", ") : String(a.answer ?? ""),
   }));
 
-  const { data: assets } = await supabase.from("assets").select("kind").eq("project_id", projectId);
+  // Fields already asked (the dedup key): never offer or accept these again.
+  const asked = new Set<string>((answers ?? []).map((a) => a.field_path).filter((f): f is string => !!f));
+  const allowed = availableFields(asked);
+  const reqRemaining = requiredRemaining(asked);
 
-  const bd = (project.brand_data ?? {}) as BrandDataObject;
-  const merged = withAssetReferences(Object.keys(bd).length ? bd : emptyBrandData(), assets);
-  const { missing } = computeCompleteness(merged);
+  // Nothing left worth asking → the session is complete.
+  if (allowed.length === 0) return NextResponse.json({ question: COMPLETE });
 
-  const prompt = buildPrompt({
+  const allowedSet = new Set(allowed.map((a) => a.path));
+  const base = {
     client: project.client_name,
     contact: project.contact_name ?? undefined,
     industry: project.industry ?? undefined,
     history,
-    missing,
-  });
+    allowed,
+    asked: [...asked],
+    requiredRemaining: reqRemaining,
+  };
 
-  try {
-    const raw = await gemini(prompt, QUESTION_SCHEMA as unknown as Record<string, unknown>);
-    const q = parseJson<Question>(raw);
-    return NextResponse.json({ question: q });
-  } catch (e) {
-    return NextResponse.json({ error: (e as Error).message }, { status: 502 });
+  // Try the model, guarding against repeats and premature completion; retry with
+  // a stronger note, then fall back to a deterministic on-field question.
+  let retryNote: string | undefined;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      const raw = await gemini(buildPrompt({ ...base, retryNote }), QUESTION_SCHEMA as unknown as Record<string, unknown>);
+      const q = parseJson<Question>(raw);
+
+      // Premature completion (required fields still open) — force another question.
+      if (q.interviewComplete && reqRemaining.length > 0) {
+        retryNote = `Do NOT finish yet — these required fields are still unasked: ${reqRemaining.join(", ")}. Ask one of them.`;
+        continue;
+      }
+      if (q.interviewComplete) return NextResponse.json({ question: q });
+
+      // Repeat / out-of-list field — reject and retry.
+      if (!q.field || !allowedSet.has(q.field)) {
+        retryNote = `You chose "${q.field ?? "(none)"}", which is already asked or not allowed. Choose "field" ONLY from the ASK NEXT list.`;
+        continue;
+      }
+      return NextResponse.json({ question: q });
+    } catch (e) {
+      // On the last attempt, fall through to the deterministic fallback.
+      if (attempt === 2) {
+        return NextResponse.json({ question: fallbackQuestion(reqRemaining[0] ?? allowed[0].path) });
+      }
+      retryNote = `Previous attempt failed (${(e as Error).message}). Return valid JSON.`;
+    }
   }
+
+  // All retries produced repeats — use a guaranteed-fresh on-field question.
+  return NextResponse.json({ question: fallbackQuestion(reqRemaining[0] ?? allowed[0].path) });
 }

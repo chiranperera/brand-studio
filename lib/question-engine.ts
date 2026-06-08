@@ -10,6 +10,70 @@ import { FIELD_PATHS } from "./mapping";
 
 export type InputType = "textarea" | "text" | "select" | "multiselect" | "rating";
 
+const ABOUT = new Map(FIELD_PATHS.map((f) => [f.path, f.about]));
+
+/**
+ * The ordered pool of fields worth asking a client. Each is asked at most once;
+ * once asked, it's excluded — so questions never repeat (same form or reworded).
+ * When the pool is exhausted the session completes.
+ */
+export const ASK_POOL: string[] = [
+  "business.type",
+  "business.description",
+  "business.offerings",
+  "business.stage",
+  "audience.segments",
+  "audience.b2x",
+  "audience.jobsToBeDone",
+  "goals.primary",
+  "goals.metrics",
+  "goals.blocker",
+  "brand.personality",
+  "brand.archetype",
+  "voice.person",
+  "voice.emoji",
+  "logo.preferredTypes",
+  "logo.notes",
+  "color.direction",
+  "color.lightDark",
+  "type.displayFeel",
+  "type.bodyFeel",
+  "visualStyle.cluster",
+  "visualStyle.moodWords",
+  "imagery.mode",
+  "imagery.iconStyle",
+  "surfaces",
+  "constraints.stack",
+  "constraints.accessibility",
+];
+
+/**
+ * Required-field groups (alternatives within a group satisfy it). The session
+ * shouldn't complete until each group has been asked. Mirrors brand-data's
+ * REQUIRED list (minus the reference, which is satisfied by an upload).
+ */
+export const REQUIRED_GROUPS: string[][] = [
+  ["business.type"],
+  ["business.description"],
+  ["business.offerings"],
+  ["audience.segments"],
+  ["goals.primary"],
+  ["brand.archetype", "brand.personality"],
+  ["color.direction", "color.locked"],
+  ["type.displayFeel"],
+  ["surfaces"],
+];
+
+/** Required field paths whose group hasn't been asked yet (prioritise these). */
+export function requiredRemaining(asked: Set<string>): string[] {
+  return REQUIRED_GROUPS.filter((g) => !g.some((f) => asked.has(f))).map((g) => g[0]);
+}
+
+/** Fields still available to ask (in pool, not yet asked), with their meaning. */
+export function availableFields(asked: Set<string>): { path: string; about: string }[] {
+  return ASK_POOL.filter((p) => !asked.has(p)).map((p) => ({ path: p, about: ABOUT.get(p) ?? "" }));
+}
+
 export interface Question {
   section: string;
   question: string;
@@ -59,16 +123,29 @@ export interface BuildPromptArgs {
   contact?: string;
   industry?: string;
   history: HistoryItem[];
-  missing: string[]; // required field paths still empty (from computeCompleteness)
+  allowed: { path: string; about: string }[]; // fields not yet asked (the ONLY valid choices)
+  asked: string[]; // fields already asked — must never be asked again
+  requiredRemaining: string[]; // required fields whose group is still unasked
+  retryNote?: string; // appended when re-asking after a guard rejection
 }
 
-export function buildPrompt({ client, contact, industry, history, missing }: BuildPromptArgs): string {
+export function buildPrompt({
+  client,
+  contact,
+  industry,
+  history,
+  allowed,
+  asked,
+  requiredRemaining,
+  retryNote,
+}: BuildPromptArgs): string {
   const hist =
     history.map((x, i) => `${i + 1}. [${x.section}] Q: ${x.question}\n   A: ${x.answer || "(skipped)"}`).join("\n") ||
     "(none yet — this is the first question)";
 
-  const fieldList = FIELD_PATHS.map((f) => `- ${f.path} — ${f.about}`).join("\n");
+  const allowedList = allowed.map((f) => `- ${f.path} — ${f.about}`).join("\n");
   const ind = industry || "general";
+  const canComplete = requiredRemaining.length === 0;
 
   return `You are an expert brand & design discovery interviewer for a one-person AI-native creative studio. You are interviewing a prospective client to capture a complete, structured brand brief that will auto-generate a design system, logo direction, brand guidelines, and a website. Every answer must map to a typed field.
 
@@ -76,24 +153,25 @@ CLIENT: ${client}
 CONTACT: ${contact || "unknown"}
 INDUSTRY: ${ind}
 
-TOPIC AREAS TO COVER: ${TOPICS.join("; ")}.
-
-REQUIRED FIELDS STILL EMPTY (target these first — the session can only finish when this list is empty):
-${missing.length ? missing.map((m) => `- ${m}`).join("\n") : "(all required fields captured)"}
-
 CONVERSATION SO FAR:
 ${hist}
 
+FIELDS ALREADY ASKED — NEVER ask about these again, not even reworded or from a different angle:
+${asked.length ? asked.map((a) => `- ${a}`).join("\n") : "(none yet)"}
+
+ASK NEXT — choose "field" from EXACTLY this list of not-yet-asked fields (nothing else is allowed):
+${allowedList || "(none left — set interviewComplete: true)"}
+
+${requiredRemaining.length ? `STILL REQUIRED (ask one of these first): ${requiredRemaining.join(", ")}.` : "All required fields are covered."}
+
 TASK: Produce the SINGLE best NEXT question to ask, as JSON.
 RULES:
-- KEEP THE QUESTION SHORT: one plain sentence, ideally under 12 words, no preamble. It must be readable aloud to a client. Personalize to the ${ind} industry and to prior answers.
-- "Show, don't ask": prefer clickable answers. DEFAULT to "multiselect" for almost any option question — a client usually has more than one answer (offerings, audiences, surfaces, channels, features).
-- Use "select" (one choice) ONLY when genuinely mutually exclusive (product/service/hybrid, light/dark, yes/no). Use "rating" for a 1-5 importance. Use "text" for a tiny fact (URL, a hex, a number). Use "textarea" ONLY when an open story is essential (e.g. their #1 goal) — keep it rare.
-- For "select"/"multiselect", ALWAYS provide 4-8 CONCRETE options specific to the ${ind} industry, phrased in plain language (hide the jargon). The interviewer can add an "Other".
-- "field" is REQUIRED: the BrandDataObject dot-path this answer fills, chosen from EXACTLY this list:
-${fieldList}
-- Do NOT repeat a question whose field is already well covered. Move the session toward emptying the REQUIRED FIELDS list above.
-- "section" must be one of the topic areas. "help" is an optional ≤8-word hint.
-- Set "interviewComplete": true ONLY when the REQUIRED FIELDS list above is empty. Otherwise false.
+- Pick "field" from the ASK NEXT list ONLY. It is the field this answer fills. One question = one field. Never choose a field from the ALREADY ASKED list.
+- Do NOT ask anything that overlaps in meaning with a question already in the conversation, even if worded differently or expecting the same answer. If a topic is covered, move on.
+- KEEP THE QUESTION SHORT: one plain sentence, ideally under 12 words, no preamble, readable aloud. Personalize to the ${ind} industry and prior answers.
+- "Show, don't ask": DEFAULT to "multiselect". Use "select" only when mutually exclusive (product/service/hybrid, light/dark, yes/no). "rating" for 1-5 importance. "text" for a tiny fact. "textarea" only when an open story is essential — keep rare.
+- For "select"/"multiselect", ALWAYS provide 4-8 CONCRETE options specific to the ${ind} industry, in plain language.
+- "section" must be one of: ${TOPICS.join("; ")}. "help" is an optional ≤8-word hint.
+- interviewComplete: ${canComplete ? 'you MAY set this true to finish now (all required fields covered); otherwise false and ask a remaining field.' : "false — required fields above are still needed."}${retryNote ? `\n- IMPORTANT: ${retryNote}` : ""}
 Return ONLY the JSON object.`;
 }
