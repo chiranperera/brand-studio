@@ -1,0 +1,46 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
+}
+
+html,
+body {
+  background: #0a0a0b;
+  color: #ffffff;
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+@layer components {
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors;
+  }
+  .btn-primary {
+    @apply btn bg-accent text-bg hover:opacity-90;
+  }
+  .btn-ghost {
+    @apply btn border border-line text-ink-2 hover:bg-panel2 hover:text-ink;
+  }
+  .card {
+    @apply rounded-xl border border-line bg-panel p-5;
+  }
+  .input {
+    @apply w-full rounded-lg border border-line bg-panel2 px-3 py-2 text-sm text-ink placeholder:text-ink-4 outline-none focus:border-accent;
+  }
+  .label {
+    @apply mb-1.5 block text-xs font-medium uppercase tracking-wide text-ink-3;
+  }
+  .chip {
+    @apply cursor-pointer select-none rounded-full border border-line px-3 py-1.5 text-sm text-ink-2 transition-colors hover:border-ink-3;
+  }
+  .chip-on {
+    @apply border-accent bg-accent/10 text-ink;
+  }
+  .mono {
+    font-family: var(--font-mono);
+  }
+}

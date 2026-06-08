@@ -1,0 +1,3 @@
+-- Seed data is intentionally empty for Phase 1.
+-- Projects are created per authenticated host via the dashboard; there is no
+-- shared/global seed content. Add fixtures here only for local testing.
