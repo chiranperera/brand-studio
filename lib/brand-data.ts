@@ -291,6 +291,9 @@ export const brandDataSchema = z.object({
  * human label + a predicate. `computeCompleteness` powers the progress rail and
  * gates export.
  */
+// Keep this list in sync with REQUIRED_GROUPS in lib/question-engine.ts (which
+// drives when the AI session is allowed to finish). Covers every key brand &
+// design category, so 100% means a genuinely complete brief.
 const REQUIRED: { label: string; ok: (b: BrandDataObject) => boolean }[] = [
   { label: "business.type", ok: (b) => !!b.business.type },
   { label: "business.description", ok: (b) => !!b.business.description?.trim() },
@@ -298,8 +301,12 @@ const REQUIRED: { label: string; ok: (b: BrandDataObject) => boolean }[] = [
   { label: "audience.segments", ok: (b) => b.audience.segments.length > 0 },
   { label: "goals.primary", ok: (b) => !!b.goals.primary?.trim() },
   { label: "brand.archetype or brand.personality", ok: (b) => !!b.brand.archetype || b.brand.personality.length > 0 },
+  { label: "voice.person", ok: (b) => !!b.voice.person },
+  { label: "logo.preferredTypes", ok: (b) => b.logo.preferredTypes.length > 0 },
   { label: "color.direction or color.locked", ok: (b) => !!b.color.direction || b.color.locked.length > 0 },
   { label: "type.displayFeel", ok: (b) => !!b.type.displayFeel },
+  { label: "visualStyle.cluster", ok: (b) => !!b.visualStyle.cluster },
+  { label: "imagery.mode", ok: (b) => b.imagery.mode.length > 0 },
   { label: "surfaces", ok: (b) => b.surfaces.length > 0 },
   { label: "≥1 reference", ok: (b) => b.references.length > 0 },
 ];

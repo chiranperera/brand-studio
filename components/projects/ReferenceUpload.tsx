@@ -39,6 +39,7 @@ export function ReferenceUpload({
   const [kind, setKind] = useState("inspiration");
   const [sentiment, setSentiment] = useState("love");
   const [note, setNote] = useState("");
+  const [staged, setStaged] = useState<File | null>(null); // chosen but not yet uploaded
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
@@ -71,13 +72,15 @@ export function ReferenceUpload({
     onReferencesChange?.(refs.length);
   }
 
-  async function upload(file: File) {
+  // Commit the staged file together with the type/sentiment/note the user set.
+  async function commitUpload() {
+    if (!staged) return;
     setBusy(true);
     setErr(null);
     const supabase = createClient();
-    const safe = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+    const safe = staged.name.replace(/[^a-zA-Z0-9._-]/g, "_");
     const path = `${projectId}/${crypto.randomUUID()}-${safe}`;
-    const { error: upErr } = await supabase.storage.from("references").upload(path, file);
+    const { error: upErr } = await supabase.storage.from("references").upload(path, staged);
     if (upErr) {
       setErr(upErr.message);
       setBusy(false);
@@ -93,6 +96,7 @@ export function ReferenceUpload({
       const next = [data as Asset, ...assets];
       setAssets(next);
       setNote("");
+      setStaged(null);
       await syncBrandReferences(next);
       router.refresh();
     }
@@ -135,23 +139,46 @@ export function ReferenceUpload({
         {!compact && (
           <div className="min-w-40 flex-1">
             <label className="label">Note</label>
-            <input className="input" value={note} onChange={(e) => setNote(e.target.value)} placeholder="Why this?" />
+            <input
+              className="input"
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              placeholder={staged ? "Add a note for this image…" : "Why this?"}
+            />
           </div>
         )}
-        <label className="btn-primary cursor-pointer">
-          {busy ? "Uploading…" : "Upload file"}
-          <input
-            type="file"
-            className="hidden"
-            disabled={busy}
-            onChange={(e) => {
-              const f = e.target.files?.[0];
-              if (f) void upload(f);
-              e.target.value = "";
-            }}
-          />
-        </label>
+        {staged ? (
+          <button className="btn-primary" disabled={busy} onClick={() => void commitUpload()}>
+            {busy ? "Uploading…" : "Upload"}
+          </button>
+        ) : (
+          <label className="btn-ghost cursor-pointer">
+            Choose image
+            <input
+              type="file"
+              accept="image/*,.pdf,.svg"
+              className="hidden"
+              disabled={busy}
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) setStaged(f);
+                e.target.value = "";
+              }}
+            />
+          </label>
+        )}
       </div>
+
+      {/* Show the chosen file so the user can add a note before committing. */}
+      {staged && (
+        <div className="mt-3 flex items-center gap-3 rounded-lg border border-accent/40 bg-panel2 px-3 py-2 text-sm">
+          <span className="text-ink-2">📎 {staged.name}</span>
+          <span className="text-ink-4">— set type/sentiment/note above, then Upload</span>
+          <button className="ml-auto text-ink-4 hover:text-red-300" onClick={() => setStaged(null)} disabled={busy}>
+            Clear
+          </button>
+        </div>
+      )}
       {err && <p className="mt-2 text-sm text-red-400">{err}</p>}
 
       {assets.length > 0 && (

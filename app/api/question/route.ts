@@ -4,8 +4,8 @@ import { gemini, parseJson } from "@/lib/gemini";
 import {
   buildPrompt,
   QUESTION_SCHEMA,
-  availableFields,
-  requiredRemaining,
+  unmetRequiredGroups,
+  describe,
   type Question,
   type HistoryItem,
 } from "@/lib/question-engine";
@@ -59,13 +59,18 @@ export async function POST(req: Request) {
 
   // Fields already asked (the dedup key): never offer or accept these again.
   const asked = new Set<string>((answers ?? []).map((a) => a.field_path).filter((f): f is string => !!f));
-  const allowed = availableFields(asked);
-  const reqRemaining = requiredRemaining(asked);
 
-  // Nothing left worth asking → the session is complete.
-  if (allowed.length === 0) return NextResponse.json({ question: COMPLETE });
+  // Finish as soon as every required category is covered (the session stops at
+  // 100% rather than asking endless extra questions).
+  const unmet = unmetRequiredGroups(asked);
+  if (unmet.length === 0) return NextResponse.json({ question: COMPLETE });
 
-  const allowedSet = new Set(allowed.map((a) => a.path));
+  // Ask only still-needed required fields (both alternatives of a group are
+  // valid choices); each is asked once, so questions never repeat.
+  const allowedPaths = unmet.flat().filter((p) => !asked.has(p));
+  const allowed = describe(allowedPaths);
+  const reqRemaining = unmet.map((g) => g[0]);
+  const allowedSet = new Set(allowedPaths);
   const base = {
     client: project.client_name,
     contact: project.contact_name ?? undefined,

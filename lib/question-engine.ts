@@ -52,6 +52,9 @@ export const ASK_POOL: string[] = [
  * shouldn't complete until each group has been asked. Mirrors brand-data's
  * REQUIRED list (minus the reference, which is satisfied by an upload).
  */
+// Keep in sync with REQUIRED in lib/brand-data.ts. Alternatives within a group
+// satisfy it. The session finishes when every group has been asked — covering
+// all key brand & design categories, then stopping (no endless extra questions).
 export const REQUIRED_GROUPS: string[][] = [
   ["business.type"],
   ["business.description"],
@@ -59,14 +62,28 @@ export const REQUIRED_GROUPS: string[][] = [
   ["audience.segments"],
   ["goals.primary"],
   ["brand.archetype", "brand.personality"],
+  ["voice.person"],
+  ["logo.preferredTypes"],
   ["color.direction", "color.locked"],
   ["type.displayFeel"],
+  ["visualStyle.cluster"],
+  ["imagery.mode"],
   ["surfaces"],
 ];
 
-/** Required field paths whose group hasn't been asked yet (prioritise these). */
+/** Required groups not yet asked (none of their fields appear in `asked`). */
+export function unmetRequiredGroups(asked: Set<string>): string[][] {
+  return REQUIRED_GROUPS.filter((g) => !g.some((f) => asked.has(f)));
+}
+
+/** Representative required field per unmet group (for the "ask these first" hint). */
 export function requiredRemaining(asked: Set<string>): string[] {
-  return REQUIRED_GROUPS.filter((g) => !g.some((f) => asked.has(f))).map((g) => g[0]);
+  return unmetRequiredGroups(asked).map((g) => g[0]);
+}
+
+/** Attach each path's plain-language meaning. */
+export function describe(paths: string[]): { path: string; about: string }[] {
+  return paths.map((p) => ({ path: p, about: ABOUT.get(p) ?? "" }));
 }
 
 /** Fields still available to ask (in pool, not yet asked), with their meaning. */

@@ -320,22 +320,22 @@ export function SessionFlow({
           <Link href={`/projects/${projectId}`} className="hover:text-ink">
             ← Project overview
           </Link>
-          <div className="flex items-center gap-4">
-            {!done && (
+          {!done && (
+            <div className="flex items-center gap-4">
               <button className="hover:text-ink" onClick={() => setShowRefs((s) => !s)}>
                 📎 References ({refCount})
               </button>
-            )}
-            <button
-              className="hover:text-ink"
-              onClick={async () => {
-                await commitIfDirty();
-                setDone(true);
-              }}
-            >
-              Finish &amp; add references →
-            </button>
-          </div>
+              <button
+                className="hover:text-ink"
+                onClick={async () => {
+                  await commitIfDirty();
+                  setDone(true);
+                }}
+              >
+                Finish &amp; add references →
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
