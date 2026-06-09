@@ -61,7 +61,9 @@ export function QuestionCard({
         className={`mt-5 transition-opacity ${busy ? "pointer-events-none select-none opacity-40" : ""}`}
         aria-disabled={busy}
       >
-        <InputArea question={question} value={value} onChange={onChange} />
+        {/* key by question so InputArea's internal "Add another / Other" text
+            resets per question instead of carrying over to the next one. */}
+        <InputArea key={`${index}-${question.field ?? question.question}`} question={question} value={value} onChange={onChange} />
         <div className="mt-4">
           <input
             className="input text-sm"
