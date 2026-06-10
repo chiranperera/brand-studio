@@ -6,11 +6,14 @@ import { createClient } from "@/lib/supabase/client";
 import { BANK } from "@/lib/question-bank";
 import type { Question } from "@/lib/question-engine";
 import { writeField, type AnswerValue } from "@/lib/mapping";
-import { computeCompleteness, emptyBrandData, type BrandDataObject } from "@/lib/brand-data";
+import { computeCompleteness, emptyBrandData, type BrandDataObject, type LogoType } from "@/lib/brand-data";
 import { QuestionCard } from "./QuestionCard";
 import { ProgressRail } from "./ProgressRail";
+import { LogoTypePicker } from "./LogoTypePicker";
 import { ReferenceUpload } from "@/components/projects/ReferenceUpload";
 import type { AnswerVal } from "./InputArea";
+
+type Phase = "questions" | "logo" | "done";
 
 /** One step in the session. `id` is present once the answer is persisted. */
 interface Item {
@@ -62,7 +65,8 @@ export function SessionFlow({
   const [refLen, setRefLen] = useState(initialBrandData.references.length);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [done, setDone] = useState(false);
+  const [phase, setPhase] = useState<Phase>("questions");
+  const [logoTypes, setLogoTypes] = useState<LogoType[]>(initialBrandData.logo?.preferredTypes ?? []);
   const [showRefs, setShowRefs] = useState(false);
   const [dirty, setDirty] = useState(false);
   const started = useRef(false);
@@ -71,7 +75,7 @@ export function SessionFlow({
   const refCount = refLen;
 
   /** Rebuild brand_data by replaying every persisted answer (order-independent, edit-safe). */
-  function rebuild(its: Item[], refs: number): BrandDataObject {
+  function rebuild(its: Item[], refs: number, logos: LogoType[]): BrandDataObject {
     let b = emptyBrandData();
     b.project = { ...bd.project }; // keep client/contact/email/industry
     for (const it of its) {
@@ -79,6 +83,7 @@ export function SessionFlow({
       if (it.question.field && !isEmpty(it.value)) b = writeField(b, it.question.field, it.value as AnswerValue);
     }
     b.references = Array.from({ length: refs }, () => ({ type: "upload" }));
+    b.logo = { ...b.logo, preferredTypes: logos }; // captured by the logo-type picker
     const c = computeCompleteness(b);
     b.meta = { ...b.meta, completeness: c.score, requiredMissing: c.missing };
     return b;
@@ -112,7 +117,7 @@ export function SessionFlow({
     }
     const next = its.map((x, idx) => (idx === i ? { ...it, id } : x));
     setItems(next);
-    const b = rebuild(next, refLen);
+    const b = rebuild(next, refLen, logoTypes);
     setBd(b);
     await supabase
       .from("projects")
@@ -125,6 +130,29 @@ export function SessionFlow({
     return next;
   }
 
+  /** Questions are done → go to the logo-type picker (or straight to done if a
+   *  logo type was already chosen, e.g. on resume). */
+  function finishQuestions() {
+    setPhase(logoTypes.length ? "done" : "logo");
+  }
+
+  /** Persist the logo-type selection into brand_data. */
+  async function commitLogo(types: LogoType[]) {
+    setBusy(true);
+    const b = rebuild(items, refLen, types);
+    setBd(b);
+    const supabase = createClient();
+    await supabase
+      .from("projects")
+      .update({
+        brand_data: b,
+        completeness: b.meta.completeness,
+        status: b.meta.requiredMissing.length === 0 ? "ready" : "discovery",
+      })
+      .eq("id", projectId);
+    setBusy(false);
+  }
+
   /** Append the next question (or finish). Returns nothing; updates state. */
   async function loadNext(its: Item[]) {
     setError(null);
@@ -132,7 +160,7 @@ export function SessionFlow({
 
     if (mode === "standard") {
       if (answeredCount >= BANK.length) {
-        setDone(true);
+        finishQuestions();
         return;
       }
       const q = BANK[answeredCount];
@@ -153,7 +181,7 @@ export function SessionFlow({
       if (!res.ok) throw new Error(json.error || "Could not generate a question.");
       const q = json.question as Question;
       if (q.interviewComplete) {
-        setDone(true);
+        finishQuestions();
         return;
       }
       const ni = [...its, { question: q, value: blankValue(q), note: "" }];
@@ -215,13 +243,13 @@ export function SessionFlow({
   async function back() {
     if (pos === 0) return;
     await commitIfDirty();
-    setDone(false);
+    setPhase("questions");
     setPos((p) => Math.max(0, p - 1));
   }
 
   async function jump(i: number) {
     await commitIfDirty();
-    setDone(false);
+    setPhase("questions");
     setPos(i);
   }
 
@@ -248,6 +276,25 @@ export function SessionFlow({
     </div>
   );
 
+  // Second space: the visual logo-type picker (after the questions).
+  if (phase === "logo") {
+    return (
+      <LogoTypePicker
+        selected={logoTypes}
+        onChange={setLogoTypes}
+        onComplete={async () => {
+          await commitLogo(logoTypes);
+          setPhase("done");
+        }}
+        onBack={() => {
+          setPhase("questions");
+          if (items.length) setPos(items.length - 1);
+        }}
+        busy={busy}
+      />
+    );
+  }
+
   return (
     <div className="grid gap-6 md:grid-cols-[1fr_280px]">
       <div className="space-y-4">
@@ -265,7 +312,7 @@ export function SessionFlow({
           </div>
         )}
 
-        {done ? (
+        {phase === "done" ? (
           <>
             <div className="card text-center">
               <h2 className="text-xl font-medium">Session complete</h2>
@@ -274,15 +321,21 @@ export function SessionFlow({
                   ? "All discovery categories captured — you can export the Design Pack now. Everything is saved, so you can also come back later to add reference images and re-export."
                   : `${missing.length} categor${missing.length === 1 ? "y is" : "ies are"} still open — keep going, or export with an override.`}
               </p>
-              <div className="mt-5 flex justify-center gap-2">
+              {logoTypes.length > 0 && (
+                <p className="mono mt-2 text-xs text-ink-4">Logo type: {logoTypes.join(", ")}</p>
+              )}
+              <div className="mt-5 flex flex-wrap justify-center gap-2">
                 <button
                   className="btn-ghost"
                   onClick={() => {
-                    setDone(false);
+                    setPhase("questions");
                     if (items.length) setPos(items.length - 1);
                   }}
                 >
                   Back to questions
+                </button>
+                <button className="btn-ghost" onClick={() => setPhase("logo")}>
+                  Logo types
                 </button>
                 <Link className="btn-primary" href={`/projects/${projectId}/export`}>
                   Export Design Pack
@@ -313,13 +366,13 @@ export function SessionFlow({
           <div className="card text-ink-3">{busy ? "Generating the first question…" : "Loading…"}</div>
         )}
 
-        {!done && showRefs && refPanel}
+        {phase === "questions" && showRefs && refPanel}
 
         <div className="flex items-center justify-between text-sm text-ink-4">
           <Link href={`/projects/${projectId}`} className="hover:text-ink">
             ← Project overview
           </Link>
-          {!done && (
+          {phase === "questions" && (
             <div className="flex items-center gap-4">
               <button className="hover:text-ink" onClick={() => setShowRefs((s) => !s)}>
                 📎 References ({refCount})
@@ -328,10 +381,10 @@ export function SessionFlow({
                 className="hover:text-ink"
                 onClick={async () => {
                   await commitIfDirty();
-                  setDone(true);
+                  setPhase("logo");
                 }}
               >
-                Finish session →
+                Finish questions → logo
               </button>
             </div>
           )}
@@ -346,7 +399,7 @@ export function SessionFlow({
             <span className="label">Jump to question</span>
             <ol className="space-y-1">
               {items.map((it, i) => {
-                const isCurrent = i === pos && !done;
+                const isCurrent = i === pos && phase === "questions";
                 const answered = !!it.id && !isEmpty(it.value);
                 return (
                   <li key={it.id ?? `frontier-${i}`}>

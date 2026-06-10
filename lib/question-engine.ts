@@ -32,7 +32,6 @@ export const ASK_POOL: string[] = [
   "brand.archetype",
   "voice.person",
   "voice.emoji",
-  "logo.preferredTypes",
   "logo.notes",
   "color.direction",
   "color.lightDark",
@@ -63,7 +62,8 @@ export const REQUIRED_GROUPS: string[][] = [
   ["goals.primary"],
   ["brand.archetype", "brand.personality"],
   ["voice.person"],
-  ["logo.preferredTypes"],
+  // logo.preferredTypes is captured by the visual logo-type picker after the
+  // questions (see LogoTypePicker), so it's not asked as a text question here.
   ["color.direction", "color.locked"],
   ["type.displayFeel"],
   ["visualStyle.cluster"],

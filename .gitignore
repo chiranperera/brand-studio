@@ -33,3 +33,6 @@ yarn-error.log*
 
 # exported client data (keep out of the repo)
 /exports/*.zip
+
+# raw logo source (served copies live in public/logo-types)
+/logo-stypes
