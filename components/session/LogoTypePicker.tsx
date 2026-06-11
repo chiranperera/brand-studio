@@ -1,6 +1,5 @@
 "use client";
 
-import { useState } from "react";
 import { LOGO_TYPES } from "@/lib/logo-types";
 import type { LogoType } from "@/lib/brand-data";
 
@@ -10,14 +9,17 @@ export function LogoTypePicker({
   onComplete,
   onBack,
   busy,
+  page,
+  setPage,
 }: {
   selected: LogoType[];
   onChange: (next: LogoType[]) => void;
   onComplete: () => void;
   onBack: () => void;
   busy: boolean;
+  page: number; // controlled by parent so it can be broadcast live
+  setPage: (p: number) => void;
 }) {
-  const [page, setPage] = useState(0);
   const info = LOGO_TYPES[page];
   const isSelected = selected.includes(info.slug);
 
@@ -95,7 +97,7 @@ export function LogoTypePicker({
       </div>
 
       <div className="flex items-center justify-between">
-        <button className="btn-ghost" onClick={() => (page === 0 ? onBack() : setPage((p) => p - 1))} disabled={busy}>
+        <button className="btn-ghost" onClick={() => (page === 0 ? onBack() : setPage(page - 1))} disabled={busy}>
           ← {page === 0 ? "Back to questions" : "Previous"}
         </button>
 
@@ -106,7 +108,7 @@ export function LogoTypePicker({
         </div>
 
         {page < LOGO_TYPES.length - 1 ? (
-          <button className="btn-ghost" onClick={() => setPage((p) => p + 1)} disabled={busy}>
+          <button className="btn-ghost" onClick={() => setPage(page + 1)} disabled={busy}>
             Next →
           </button>
         ) : (

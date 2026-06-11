@@ -13,7 +13,16 @@ import { LogoTypePicker } from "./LogoTypePicker";
 import { ScopePicker, type ScopeData } from "./ScopePicker";
 import { LivePanel } from "./LivePanel";
 import { ReferenceUpload } from "@/components/projects/ReferenceUpload";
-import { liveChannel, makeJoinCode, type Actor, type ClientSelect, type HostState, type LiveValue } from "@/lib/live";
+import {
+  liveChannel,
+  makeJoinCode,
+  type Actor,
+  type ClientSelect,
+  type ClientLogo,
+  type ClientScope,
+  type HostState,
+  type LiveValue,
+} from "@/lib/live";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 import type { AnswerVal } from "./InputArea";
 
@@ -75,10 +84,20 @@ export function SessionFlow({
   const [error, setError] = useState<string | null>(null);
   const [phase, setPhase] = useState<Phase>("questions");
   const [logoTypes, setLogoTypes] = useState<LogoType[]>(initialBrandData.logo?.preferredTypes ?? []);
+  const [logoPage, setLogoPage] = useState(0);
   const [surfaces, setSurfaces] = useState<Surface[]>(initialBrandData.surfaces ?? []);
   const [automation, setAutomation] = useState<Automation>(
     initialBrandData.automation ?? { needs: [], workflows: [] }
   );
+  const [scopeData, setScopeData] = useState<ScopeData>({
+    kinds: (initialBrandData.surfaces ?? []).map((s) => s.kind),
+    sections: Array.from(new Set((initialBrandData.surfaces ?? []).flatMap((s) => s.screens))),
+    features: Array.from(new Set((initialBrandData.surfaces ?? []).flatMap((s) => s.components))),
+    needs: initialBrandData.automation?.needs ?? [],
+    level: initialBrandData.automation?.level ?? "",
+    workflows: (initialBrandData.automation?.workflows ?? []).join("\n"),
+    notes: initialBrandData.automation?.notes ?? "",
+  });
   const [showRefs, setShowRefs] = useState(false);
   const [dirty, setDirty] = useState(false);
   const started = useRef(false);
@@ -280,6 +299,21 @@ export function SessionFlow({
     setDirty(true);
   }
 
+  function handleClientLogo(slug: string) {
+    lastActor.current = "client";
+    setLogoTypes((prev) =>
+      prev.includes(slug as LogoType) ? prev.filter((s) => s !== slug) : [...prev, slug as LogoType]
+    );
+  }
+
+  function handleClientScope(key: "kinds" | "sections" | "features" | "needs", value: string) {
+    lastActor.current = "client";
+    setScopeData((prev) => ({
+      ...prev,
+      [key]: prev[key].includes(value) ? prev[key].filter((v) => v !== value) : [...prev[key], value],
+    }));
+  }
+
   async function goLive() {
     setBusy(true);
     let code = joinCode;
@@ -313,6 +347,11 @@ export function SessionFlow({
     ch.on("broadcast", { event: "client_select" }, ({ payload }) =>
       handleClientSelect((payload as ClientSelect).value)
     );
+    ch.on("broadcast", { event: "client_logo" }, ({ payload }) => handleClientLogo((payload as ClientLogo).slug));
+    ch.on("broadcast", { event: "client_scope" }, ({ payload }) => {
+      const p = payload as ClientScope;
+      handleClientScope(p.key, p.value);
+    });
     ch.on("presence", { event: "sync" }, () => {
       const st = ch.presenceState() as Record<string, { role?: string; name?: string }[]>;
       let name: string | null = null;
@@ -338,31 +377,43 @@ export function SessionFlow({
     const ch = channelRef.current;
     if (!live || !ch) return;
     const cur = items[pos];
-    const state: HostState =
-      phase === "questions" && cur
-        ? {
-            kind: "question",
-            question: {
-              section: cur.question.section,
-              question: cur.question.question,
-              help: cur.question.help,
-              inputType: cur.question.inputType,
-              options: cur.question.options,
-              field: cur.question.field,
-            },
-            value: cur.value as LiveValue,
-            clientPicks,
-            index: pos,
-            total: items.length,
-          }
-        : {
-            kind: phase === "scope" ? "scope" : phase === "logo" ? "logo" : "done",
-            title:
-              phase === "scope" ? "Scope & requirements" : phase === "logo" ? "Logo types" : "Session complete",
-          };
+    let state: HostState;
+    if (phase === "questions" && cur) {
+      state = {
+        kind: "question",
+        question: {
+          section: cur.question.section,
+          question: cur.question.question,
+          help: cur.question.help,
+          inputType: cur.question.inputType,
+          options: cur.question.options,
+          field: cur.question.field,
+        },
+        value: cur.value as LiveValue,
+        clientPicks,
+        index: pos,
+        total: items.length,
+      };
+    } else if (phase === "logo") {
+      state = { kind: "logo", logo: { page: logoPage, selected: logoTypes }, title: "Logo types" };
+    } else if (phase === "scope") {
+      state = {
+        kind: "scope",
+        scope: {
+          kinds: scopeData.kinds,
+          sections: scopeData.sections,
+          features: scopeData.features,
+          needs: scopeData.needs,
+          level: scopeData.level,
+        },
+        title: "Scope & requirements",
+      };
+    } else {
+      state = { kind: "done", title: "Session complete" };
+    }
     void ch.send({ type: "broadcast", event: "host_state", payload: state });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [live, phase, pos, items, clientPicks]);
+  }, [live, phase, pos, items, clientPicks, logoPage, logoTypes, scopeData]);
 
   async function commitIfDirty() {
     if (dirty && items[pos]?.id) {
@@ -435,18 +486,10 @@ export function SessionFlow({
 
   // Space 2.5: scope & build requirements (sections + AI automation).
   if (phase === "scope") {
-    const scopeInitial: ScopeData = {
-      kinds: surfaces.map((s) => s.kind),
-      sections: Array.from(new Set(surfaces.flatMap((s) => s.screens))),
-      features: Array.from(new Set(surfaces.flatMap((s) => s.components))),
-      needs: automation.needs,
-      level: automation.level ?? "",
-      workflows: (automation.workflows ?? []).join("\n"),
-      notes: automation.notes ?? "",
-    };
     return (
       <ScopePicker
-        initial={scopeInitial}
+        data={scopeData}
+        onChange={setScopeData}
         projectId={projectId}
         onComplete={async (d) => {
           await commitScope(d);
@@ -467,6 +510,8 @@ export function SessionFlow({
       <LogoTypePicker
         selected={logoTypes}
         onChange={setLogoTypes}
+        page={logoPage}
+        setPage={setLogoPage}
         onComplete={async () => {
           await commitLogo(logoTypes);
           setPhase("done");

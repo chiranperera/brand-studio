@@ -2,7 +2,9 @@
 
 import { useEffect, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { liveChannel, type HostState, type LiveValue } from "@/lib/live";
+import { liveChannel, type HostState, type LiveValue, type ScopeKey } from "@/lib/live";
+import { LOGO_TYPES } from "@/lib/logo-types";
+import { WEBSITE_SECTIONS, WEBSITE_FEATURES, AUTOMATION_NEEDS, SURFACE_KINDS } from "@/lib/scope-options";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 
 export function LiveClient({ code }: { code: string }) {
@@ -37,6 +39,12 @@ export function LiveClient({ code }: { code: string }) {
   function send(v: LiveValue) {
     setValue(v);
     void channelRef.current?.send({ type: "broadcast", event: "client_select", payload: { value: v } });
+  }
+  function sendLogo(slug: string) {
+    void channelRef.current?.send({ type: "broadcast", event: "client_logo", payload: { slug } });
+  }
+  function sendScope(key: ScopeKey, value: string) {
+    void channelRef.current?.send({ type: "broadcast", event: "client_scope", payload: { key, value } });
   }
 
   if (!joined) {
@@ -75,6 +83,10 @@ export function LiveClient({ code }: { code: string }) {
         <div className="card text-center text-ink-3">Waiting for your designer to start…</div>
       ) : state.kind === "question" && state.question ? (
         <ClientQuestion state={state} value={value} other={other} setOther={setOther} onChange={send} />
+      ) : state.kind === "logo" && state.logo ? (
+        <ClientLogo logo={state.logo} onSelect={sendLogo} />
+      ) : state.kind === "scope" && state.scope ? (
+        <ClientScope scope={state.scope} onToggle={sendScope} />
       ) : (
         <div className="card text-center">
           <h2 className="text-lg font-medium">{state.title}</h2>
@@ -176,6 +188,79 @@ function ClientQuestion({
       </div>
 
       <p className="mt-4 text-center text-xs text-ink-4">Your designer sees your choices live and moves the session along.</p>
+    </div>
+  );
+}
+
+function ClientLogo({ logo, onSelect }: { logo: NonNullable<HostState["logo"]>; onSelect: (slug: string) => void }) {
+  const info = LOGO_TYPES[logo.page] ?? LOGO_TYPES[0];
+  const selected = logo.selected.includes(info.slug);
+  return (
+    <div className="card">
+      <div className="text-center">
+        <div className="mono text-xs uppercase tracking-widest text-ink-3">
+          Logo type {logo.page + 1} of {LOGO_TYPES.length}
+        </div>
+        <h2 className="mt-1 text-2xl font-semibold">{info.plain}</h2>
+        <p className="mono text-xs text-ink-3">{info.name}</p>
+      </div>
+      <p className="mt-3 text-sm text-ink-2">{info.summary}</p>
+      <div className="mt-4 grid grid-cols-3 gap-2">
+        {info.examples.map((e) => (
+          <div key={e.brand} className="flex aspect-[4/3] items-center justify-center overflow-hidden rounded-lg border border-line bg-white">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={e.logo} alt={e.brand} className="h-full w-full object-contain p-2" />
+          </div>
+        ))}
+      </div>
+      <button
+        onClick={() => onSelect(info.slug)}
+        className={`mt-4 w-full rounded-lg border px-4 py-3 text-sm font-medium ${
+          selected ? "border-accent bg-accent/10 text-ink" : "border-line text-ink-2"
+        }`}
+      >
+        {selected ? `✓ Selected — ${info.plain}` : `Tap to choose — ${info.plain}`}
+      </button>
+      <p className="mt-3 text-center text-xs text-ink-4">Your designer flips through the types; tap the ones you like.</p>
+    </div>
+  );
+}
+
+function ClientScope({
+  scope,
+  onToggle,
+}: {
+  scope: NonNullable<HostState["scope"]>;
+  onToggle: (key: ScopeKey, value: string) => void;
+}) {
+  const groups: { key: ScopeKey; label: string; options: string[] }[] = [
+    { key: "kinds", label: "What are we building?", options: Array.from(new Set([...SURFACE_KINDS, ...scope.kinds])) },
+    { key: "sections", label: "Sections / pages", options: Array.from(new Set([...WEBSITE_SECTIONS, ...scope.sections])) },
+    { key: "features", label: "Features", options: Array.from(new Set([...WEBSITE_FEATURES, ...scope.features])) },
+    { key: "needs", label: "AI automation", options: Array.from(new Set([...AUTOMATION_NEEDS, ...scope.needs])) },
+  ];
+  return (
+    <div className="space-y-4">
+      <div className="text-center">
+        <h2 className="text-xl font-semibold">What should we build?</h2>
+        <p className="text-sm text-ink-3">Tap what you&apos;d like — your designer fills in the rest.</p>
+      </div>
+      {groups.map((g) => (
+        <div key={g.key} className="card">
+          <span className="label">{g.label}</span>
+          <div className="flex flex-wrap gap-2">
+            {g.options.map((o) => (
+              <button
+                key={o}
+                className={`chip ${scope[g.key].includes(o) ? "chip-on" : ""}`}
+                onClick={() => onToggle(g.key, o)}
+              >
+                {o}
+              </button>
+            ))}
+          </div>
+        </div>
+      ))}
     </div>
   );
 }

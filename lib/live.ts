@@ -11,6 +11,21 @@ export type Actor = "host" | "client";
 
 export type LiveValue = string | string[] | number | null;
 
+export interface LiveLogo {
+  page: number;
+  selected: string[]; // logo-type slugs
+}
+
+export interface LiveScope {
+  kinds: string[];
+  sections: string[];
+  features: string[];
+  needs: string[];
+  level: string;
+}
+
+export type ScopeKey = "kinds" | "sections" | "features" | "needs";
+
 /** The current step the host is on, pushed to the client. */
 export interface HostState {
   kind: "question" | "scope" | "logo" | "done";
@@ -27,13 +42,27 @@ export interface HostState {
   clientPicks?: string[]; // values the client selected (for colouring)
   index?: number;
   total?: number;
+  // visual steps
+  logo?: LiveLogo;
+  scope?: LiveScope;
   // non-question steps carry a friendly label
   title?: string;
 }
 
-/** A selection coming from the client's phone. */
+/** A question selection from the client's phone. */
 export interface ClientSelect {
   value: LiveValue;
+}
+
+/** Client toggled a logo type. */
+export interface ClientLogo {
+  slug: string;
+}
+
+/** Client toggled a scope chip. */
+export interface ClientScope {
+  key: ScopeKey;
+  value: string;
 }
 
 export const liveChannel = (code: string) => `live:${code}`;

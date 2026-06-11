@@ -75,19 +75,25 @@ function ChipGroup({
 }
 
 export function ScopePicker({
-  initial,
+  data,
+  onChange,
   projectId,
   onComplete,
   onBack,
   busy,
 }: {
-  initial: ScopeData;
+  data: ScopeData; // controlled by parent so it can be broadcast live
+  onChange: (d: ScopeData) => void;
   projectId: string;
   onComplete: (d: ScopeData) => void;
   onBack: () => void;
   busy: boolean;
 }) {
-  const [d, setD] = useState<ScopeData>(initial);
+  // Controlled: mirror the parent's data via a setState-style shim so the rest
+  // of the render can keep using d/setD.
+  const d = data;
+  const setD = (u: ScopeData | ((s: ScopeData) => ScopeData)) =>
+    onChange(typeof u === "function" ? (u as (s: ScopeData) => ScopeData)(data) : u);
   const [suggesting, setSuggesting] = useState(false);
   const [suggested, setSuggested] = useState(false);
   const fetched = useRef(false);
@@ -126,7 +132,7 @@ export function ScopePicker({
   useEffect(() => {
     if (fetched.current) return;
     fetched.current = true;
-    const empty = !initial.kinds.length && !initial.sections.length && !initial.features.length && !initial.needs.length;
+    const empty = !data.kinds.length && !data.sections.length && !data.features.length && !data.needs.length;
     if (empty) void suggest();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

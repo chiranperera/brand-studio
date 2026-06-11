@@ -33,50 +33,53 @@ export function LivePanel({
 
   return (
     <div className="card border-accent/40">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-2">
         <span className="label mb-0">Live session</span>
-        <span className="flex items-center gap-2 text-xs">
-          <span className={`h-2 w-2 rounded-full ${clientName ? "bg-accent" : "bg-ink-4"}`} />
-          {clientName ? `${clientName} connected` : "Waiting for client…"}
+        <span className="flex items-center gap-1.5 text-xs">
+          <span className={`h-2 w-2 shrink-0 rounded-full ${clientName ? "bg-accent" : "bg-ink-4"}`} />
+          <span className="truncate">{clientName ? `${clientName} connected` : "Waiting…"}</span>
         </span>
       </div>
 
-      <p className="mt-2 text-sm text-ink-3">
-        Share this link (or QR) with the client. They open it on their phone — no login — and tap along live.
-      </p>
+      <p className="mt-2 text-sm text-ink-3">Share with the client — they open it on their phone (no login) and tap along.</p>
 
-      <div className="mt-3 flex items-center gap-4">
-        {qr && (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={qr} alt="Join QR code" width={120} height={120} className="rounded-lg border border-line bg-white p-1" />
-        )}
-        <div className="min-w-0 flex-1">
-          <div className="mono truncate rounded-lg border border-line bg-panel2 px-3 py-2 text-xs text-ink-2">
-            {joinUrl}
-          </div>
-          <div className="mt-2 flex gap-2">
-            <button
-              className="btn-ghost text-xs"
-              onClick={async () => {
-                if (joinUrl) {
-                  try {
-                    await navigator.clipboard.writeText(joinUrl);
-                    setCopied(true);
-                    setTimeout(() => setCopied(false), 1500);
-                  } catch {
-                    /* ignore */
-                  }
-                }
-              }}
-            >
-              {copied ? "Copied ✓" : "Copy link"}
-            </button>
-            <button className="btn-ghost text-xs" onClick={onStop}>
-              End live
-            </button>
-          </div>
+      {qr && (
+        <div className="mt-3 flex justify-center">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={qr} alt="Join QR code" width={140} height={140} className="rounded-lg border border-line bg-white p-1.5" />
         </div>
+      )}
+
+      <div className="mono mt-3 truncate rounded-lg border border-line bg-panel2 px-3 py-2 text-xs text-ink-2">
+        {joinUrl}
       </div>
+
+      <div className="mt-2 grid grid-cols-2 gap-2">
+        <button
+          className="btn-ghost text-xs"
+          onClick={async () => {
+            if (joinUrl) {
+              try {
+                await navigator.clipboard.writeText(joinUrl);
+                setCopied(true);
+                setTimeout(() => setCopied(false), 1500);
+              } catch {
+                /* ignore */
+              }
+            }
+          }}
+        >
+          {copied ? "Copied ✓" : "Copy link"}
+        </button>
+        <button className="btn-ghost text-xs" onClick={onStop}>
+          End live
+        </button>
+      </div>
+
+      <p className="mt-3 border-t border-line pt-3 text-xs text-ink-4">
+        The client sees whatever step you&apos;re on. Run the questions, or open <b className="text-ink-3">Scope</b> /{" "}
+        <b className="text-ink-3">Logo types</b> — they&apos;ll tap along.
+      </p>
     </div>
   );
 }
