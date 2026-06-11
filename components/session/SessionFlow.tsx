@@ -10,7 +10,9 @@ import { computeCompleteness, emptyBrandData, type BrandDataObject, type LogoTyp
 import { QuestionCard } from "./QuestionCard";
 import { LogoTypePicker } from "./LogoTypePicker";
 import { ScopePicker, type ScopeData } from "./ScopePicker";
+import { ColorPicker } from "./ColorPicker";
 import { LivePanel } from "./LivePanel";
+import { paletteById, matchPalette } from "@/lib/color-palettes";
 import { ReferenceUpload } from "@/components/projects/ReferenceUpload";
 import {
   liveChannel,
@@ -27,7 +29,7 @@ import {
 import type { RealtimeChannel } from "@supabase/supabase-js";
 import type { AnswerVal } from "./InputArea";
 
-type Phase = "questions" | "scope" | "logo" | "done";
+type Phase = "questions" | "scope" | "color" | "logo" | "done";
 type Surface = { kind: string; screens: string[]; components: string[] };
 type Automation = BrandDataObject["automation"];
 
@@ -86,6 +88,9 @@ export function SessionFlow({
   const [phase, setPhase] = useState<Phase>("questions");
   const [logoTypes, setLogoTypes] = useState<LogoType[]>(initialBrandData.logo?.preferredTypes ?? []);
   const [logoPage, setLogoPage] = useState(0);
+  const [colorPaletteId, setColorPaletteId] = useState<string | null>(
+    matchPalette(initialBrandData.color?.chosenPalette)
+  );
   const [surfaces, setSurfaces] = useState<Surface[]>(initialBrandData.surfaces ?? []);
   const [automation, setAutomation] = useState<Automation>(
     initialBrandData.automation ?? { needs: [], workflows: [] }
@@ -122,6 +127,7 @@ export function SessionFlow({
     logoTypes: LogoType[];
     surfaces: Surface[];
     automation: Automation;
+    colorPaletteId: string | null;
   }
 
   /** Rebuild brand_data by replaying every persisted answer (order-independent, edit-safe). */
@@ -136,12 +142,22 @@ export function SessionFlow({
     b.logo = { ...b.logo, preferredTypes: extra.logoTypes }; // logo-type picker
     b.surfaces = extra.surfaces; // scope picker
     b.automation = extra.automation; // scope picker
+    const pal = paletteById(extra.colorPaletteId); // colour picker
+    if (pal) {
+      b.color = {
+        ...b.color,
+        chosenPalette: pal.colors,
+        locked: b.color.locked?.length
+          ? b.color.locked
+          : pal.colors.filter((c) => c.role === "primary" || c.role === "secondary").map((c) => ({ hex: c.hex })),
+      };
+    }
     const c = computeCompleteness(b);
     b.meta = { ...b.meta, completeness: c.score, requiredMissing: c.missing };
     return b;
   }
 
-  const currentExtras = (): Extras => ({ logoTypes, surfaces, automation });
+  const currentExtras = (): Extras => ({ logoTypes, surfaces, automation, colorPaletteId });
 
   /** Persist item `i` (insert or update), rebuild brand_data, return the updated items. */
   async function commit(i: number, its: Item[]): Promise<Item[]> {
@@ -195,11 +211,20 @@ export function SessionFlow({
   }
 
   const scopeDone = surfaces.length > 0 && automation.needs.length > 0;
+  const colorDone = !!colorPaletteId;
   const logoDone = logoTypes.length > 0;
 
-  /** Questions are done → advance to the first unfinished space (scope → logo → done). */
+  /** Next unfinished space, in order: scope → colour → logo → done. */
+  function nextPhase(): Phase {
+    if (!scopeDone) return "scope";
+    if (!colorDone) return "color";
+    if (!logoDone) return "logo";
+    return "done";
+  }
+
+  /** Questions are done → advance to the first unfinished space. */
   function finishQuestions() {
-    setPhase(!scopeDone ? "scope" : !logoDone ? "logo" : "done");
+    setPhase(nextPhase());
   }
 
   async function persistBrand(b: BrandDataObject) {
@@ -226,7 +251,17 @@ export function SessionFlow({
     };
     setSurfaces(nextSurfaces);
     setAutomation(nextAutomation);
-    const b = rebuild(items, refLen, { logoTypes, surfaces: nextSurfaces, automation: nextAutomation });
+    const b = rebuild(items, refLen, { ...currentExtras(), surfaces: nextSurfaces, automation: nextAutomation });
+    setBd(b);
+    await persistBrand(b);
+    setBusy(false);
+  }
+
+  /** Persist the chosen colour palette into brand_data. */
+  async function commitColor(id: string) {
+    setBusy(true);
+    setColorPaletteId(id);
+    const b = rebuild(items, refLen, { ...currentExtras(), colorPaletteId: id });
     setBd(b);
     await persistBrand(b);
     setBusy(false);
@@ -235,7 +270,7 @@ export function SessionFlow({
   /** Persist the logo-type selection into brand_data. */
   async function commitLogo(types: LogoType[]) {
     setBusy(true);
-    const b = rebuild(items, refLen, { logoTypes: types, surfaces, automation });
+    const b = rebuild(items, refLen, { ...currentExtras(), logoTypes: types });
     setBd(b);
     await persistBrand(b);
     setBusy(false);
@@ -454,6 +489,9 @@ export function SessionFlow({
         },
         title: "Scope & requirements",
       };
+    } else if (phase === "color") {
+      // Live colour-sync is the next increment; show a follow-along placeholder.
+      state = { kind: "done", title: "Choosing the colour palette" };
     } else {
       state = { kind: "done", title: "Session complete" };
     }
@@ -527,6 +565,7 @@ export function SessionFlow({
       {([
         ["questions", "Questions"],
         ["scope", "Scope"],
+        ["color", "Colour"],
         ["logo", "Logo"],
         ["done", "Done"],
       ] as [Phase, string][]).map(([p, label], i) => (
@@ -620,12 +659,31 @@ export function SessionFlow({
           projectId={projectId}
           onComplete={async (d) => {
             await commitScope(d);
-            setPhase(logoDone ? "done" : "logo");
+            setPhase(!colorDone ? "color" : !logoDone ? "logo" : "done");
           }}
           onBack={() => {
             setPhase("questions");
             if (items.length) setPos(items.length - 1);
           }}
+          busy={busy}
+        />
+      </div>
+    );
+  }
+
+  // Colour palette picker.
+  if (phase === "color") {
+    return (
+      <div>
+        {topBar}
+        <ColorPicker
+          selected={colorPaletteId}
+          onChange={setColorPaletteId}
+          onComplete={async () => {
+            if (colorPaletteId) await commitColor(colorPaletteId);
+            setPhase(!logoDone ? "logo" : "done");
+          }}
+          onBack={() => setPhase("scope")}
           busy={busy}
         />
       </div>
@@ -646,7 +704,7 @@ export function SessionFlow({
             await commitLogo(logoTypes);
             setPhase("done");
           }}
-          onBack={() => setPhase("scope")}
+          onBack={() => setPhase("color")}
           busy={busy}
         />
       </div>
@@ -697,6 +755,9 @@ export function SessionFlow({
                 </button>
                 <button className="btn-ghost" onClick={() => setPhase("scope")}>
                   Scope
+                </button>
+                <button className="btn-ghost" onClick={() => setPhase("color")}>
+                  Colour
                 </button>
                 <button className="btn-ghost" onClick={() => setPhase("logo")}>
                   Logo types
