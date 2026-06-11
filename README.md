@@ -47,9 +47,10 @@ and the export. By the end, `brand_data` is a fully-typed object the export read
 
 ## Setup
 1. `npm install`
-2. Create a Supabase project. In the SQL editor, run
-   [`supabase/migrations/0001_init.sql`](./supabase/migrations/0001_init.sql)
-   (creates tables, RLS, and the `references` / `exports` storage buckets).
+2. Create a Supabase project. In the SQL editor, run **[`supabase/setup.sql`](./supabase/setup.sql)**
+   — one idempotent script that creates all tables, RLS, storage buckets, and the
+   later columns (`answers.actor`, `answers.options`). Safe to re-run.
+   (Individual migrations live in `supabase/migrations/` if you prefer.)
 3. Copy `.env.local.example` → `.env.local` and fill:
    - `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY` (Project → API)
    - `SUPABASE_SERVICE_ROLE_KEY` (server only)
