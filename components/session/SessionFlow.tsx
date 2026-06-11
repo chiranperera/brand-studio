@@ -381,6 +381,9 @@ export function SessionFlow({
                 className="hover:text-ink"
                 onClick={async () => {
                   await commitIfDirty();
+                  // Drop a trailing unanswered "current" placeholder so the
+                  // saved question count stays stable.
+                  setItems((prev) => (prev.length && !prev[prev.length - 1].id ? prev.slice(0, -1) : prev));
                   setPhase("logo");
                 }}
               >

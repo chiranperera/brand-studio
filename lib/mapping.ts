@@ -136,9 +136,18 @@ export function writeField(bd: BrandDataObject, path: string, value: AnswerValue
   const next: BrandDataObject = structuredClone(bd);
 
   switch (path) {
-    case "business.type":
-      next.business.type = pickEnum(value, ["product", "service", "hybrid"]);
+    case "business.type": {
+      // Any non-empty answer resolves to a type ("both"/anything else → hybrid).
+      const s = asString(value).toLowerCase();
+      next.business.type = /product/.test(s)
+        ? "product"
+        : /service/.test(s)
+          ? "service"
+          : s
+            ? "hybrid"
+            : undefined;
       break;
+    }
     case "business.description":
       next.business.description = asString(value);
       break;
@@ -229,7 +238,7 @@ export function writeField(bd: BrandDataObject, path: string, value: AnswerValue
       next.voice.formality = asNumber(value);
       break;
     case "voice.person":
-      next.voice.person = pickEnum(value, ["we", "you", "mixed"]);
+      next.voice.person = pickEnum(value, ["we", "you", "mixed"]) ?? (asString(value) ? "mixed" : undefined);
       break;
     case "voice.emoji":
       next.voice.emoji = asBool(value);
@@ -294,9 +303,15 @@ export function writeField(bd: BrandDataObject, path: string, value: AnswerValue
       break;
 
     case "imagery.mode": {
-      const modes = asStringArray(value)
-        .map((s) => s.toLowerCase())
-        .filter((s): s is "photo" | "illustration" | "3d" => ["photo", "illustration", "3d"].includes(s));
+      // Map common phrasings to the canonical modes, but keep anything else the
+      // client picked so the answer is never silently dropped.
+      const modes = asStringArray(value).map((raw) => {
+        const l = raw.toLowerCase();
+        if (/photo|image|real|lifestyle/.test(l)) return "photo";
+        if (/illustrat|draw|vector|graphic|cartoon/.test(l)) return "illustration";
+        if (/3d|render|three/.test(l)) return "3d";
+        return l;
+      });
       next.imagery.mode = Array.from(new Set([...next.imagery.mode, ...modes]));
       break;
     }

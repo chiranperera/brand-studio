@@ -106,7 +106,7 @@ export interface BrandDataObject {
   };
 
   imagery: {
-    mode: ("photo" | "illustration" | "3d")[];
+    mode: string[]; // canonical "photo" | "illustration" | "3d", plus any picked label
     iconStyle?: string;
     mood?: string;
   };
@@ -245,7 +245,7 @@ export const brandDataSchema = z.object({
   }),
   visualStyle: z.object({ cluster: z.string().optional(), moodWords: z.array(z.string()) }),
   imagery: z.object({
-    mode: z.array(z.enum(["photo", "illustration", "3d"])),
+    mode: z.array(z.string()),
     iconStyle: z.string().optional(),
     mood: z.string().optional(),
   }),
@@ -295,19 +295,19 @@ export const brandDataSchema = z.object({
 // drives when the AI session is allowed to finish). Covers every key brand &
 // design category, so 100% means a genuinely complete brief.
 const REQUIRED: { label: string; ok: (b: BrandDataObject) => boolean }[] = [
-  { label: "business.type", ok: (b) => !!b.business.type },
-  { label: "business.description", ok: (b) => !!b.business.description?.trim() },
-  { label: "business.offerings", ok: (b) => b.business.offerings.length > 0 },
-  { label: "audience.segments", ok: (b) => b.audience.segments.length > 0 },
-  { label: "goals.primary", ok: (b) => !!b.goals.primary?.trim() },
-  { label: "brand.archetype or brand.personality", ok: (b) => !!b.brand.archetype || b.brand.personality.length > 0 },
-  { label: "voice.person", ok: (b) => !!b.voice.person },
-  { label: "logo.preferredTypes", ok: (b) => b.logo.preferredTypes.length > 0 },
-  { label: "color.direction or color.locked", ok: (b) => !!b.color.direction || b.color.locked.length > 0 },
-  { label: "type.displayFeel", ok: (b) => !!b.type.displayFeel },
-  { label: "visualStyle.cluster", ok: (b) => !!b.visualStyle.cluster },
-  { label: "imagery.mode", ok: (b) => b.imagery.mode.length > 0 },
-  { label: "surfaces", ok: (b) => b.surfaces.length > 0 },
+  { label: "Business type", ok: (b) => !!b.business.type },
+  { label: "What the business does", ok: (b) => !!b.business.description?.trim() },
+  { label: "Products / services", ok: (b) => b.business.offerings.length > 0 },
+  { label: "Target audience", ok: (b) => b.audience.segments.length > 0 },
+  { label: "Primary goal", ok: (b) => !!b.goals.primary?.trim() },
+  { label: "Brand personality", ok: (b) => !!b.brand.archetype || b.brand.personality.length > 0 },
+  { label: "Voice", ok: (b) => !!b.voice.person },
+  { label: "Logo type", ok: (b) => b.logo.preferredTypes.length > 0 },
+  { label: "Colour direction", ok: (b) => !!b.color.direction || b.color.locked.length > 0 },
+  { label: "Typography feel", ok: (b) => !!b.type.displayFeel },
+  { label: "Visual style", ok: (b) => !!b.visualStyle.cluster },
+  { label: "Imagery style", ok: (b) => b.imagery.mode.length > 0 },
+  { label: "Surfaces to design", ok: (b) => b.surfaces.length > 0 },
   // Reference images are intentionally NOT required: in a live discovery session
   // the designer gathers inspiration/competitor/logo files afterwards. The
   // session reaches 100% on the answers alone; references can be added later and
