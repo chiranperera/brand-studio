@@ -8,7 +8,6 @@ import type { Question } from "@/lib/question-engine";
 import { writeField, type AnswerValue } from "@/lib/mapping";
 import { computeCompleteness, emptyBrandData, type BrandDataObject, type LogoType } from "@/lib/brand-data";
 import { QuestionCard } from "./QuestionCard";
-import { ProgressRail } from "./ProgressRail";
 import { LogoTypePicker } from "./LogoTypePicker";
 import { ScopePicker, type ScopeData } from "./ScopePicker";
 import { LivePanel } from "./LivePanel";
@@ -106,6 +105,7 @@ export function SessionFlow({
 
   // ----- live multi-device session (Phase 3) -----
   const [live, setLive] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
   const [joinCode, setJoinCode] = useState<string | null>(initialJoinCode);
   const [clientName, setClientName] = useState<string | null>(null);
   const [clientPicks, setClientPicks] = useState<string[]>([]); // client-attributed values on the current question
@@ -523,7 +523,7 @@ export function SessionFlow({
 
   // Small, subtle top nav to jump between spaces without stepping through each.
   const phaseNav = (
-    <nav className="mx-auto mb-5 flex max-w-3xl items-center gap-1.5 text-xs text-ink-4">
+    <nav className="flex items-center gap-1.5 text-xs text-ink-4">
       {([
         ["questions", "Questions"],
         ["scope", "Scope"],
@@ -545,6 +545,55 @@ export function SessionFlow({
     </nav>
   );
 
+  // Top bar: phase nav (left) + a settings cog (right) that opens the live-session
+  // controls in a small overlay.
+  const topBar = (
+    <div className="mb-4 flex items-center justify-between">
+      {phaseNav}
+      <div className="relative">
+        <button
+          onClick={() => setShowSettings((s) => !s)}
+          aria-label="Settings"
+          title="Live session settings"
+          className={`rounded-md border px-2 py-1 transition-colors ${
+            live ? "border-accent/50 text-accent" : "border-line text-ink-3 hover:text-ink"
+          }`}
+        >
+          ⚙
+        </button>
+        {showSettings && (
+          <>
+            <div className="fixed inset-0 z-20" onClick={() => setShowSettings(false)} />
+            <div className="absolute right-0 top-9 z-30 w-72">
+              <LivePanel
+                live={live}
+                joinUrl={joinCode && typeof window !== "undefined" ? `${window.location.origin}/join/${joinCode}` : null}
+                clientName={clientName}
+                onGoLive={goLive}
+                onStop={stopLive}
+                busy={busy}
+              />
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+
+  // Persistent horizontal completeness bar at the very top.
+  const progressBar = (
+    <div className="mb-5">
+      <div className="flex items-center justify-between">
+        <span className="label mb-0">Completeness</span>
+        <span className="mono text-sm font-semibold text-ink">{score}%</span>
+      </div>
+      <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-panel2">
+        <div className="h-full bg-accent transition-all" style={{ width: `${score}%` }} />
+      </div>
+      {missing.length > 0 && <p className="mt-1 text-[11px] text-ink-4">Still needed: {missing.join(" · ")}</p>}
+    </div>
+  );
+
   const refPanel = (
     <div className="card">
       <div className="mb-1 flex items-center justify-between">
@@ -564,7 +613,7 @@ export function SessionFlow({
   if (phase === "scope") {
     return (
       <div>
-        {phaseNav}
+        {topBar}
         <ScopePicker
           data={scopeData}
           onChange={setScopeData}
@@ -587,7 +636,7 @@ export function SessionFlow({
   if (phase === "logo") {
     return (
       <div>
-        {phaseNav}
+        {topBar}
         <LogoTypePicker
           selected={logoTypes}
           onChange={setLogoTypes}
@@ -606,7 +655,8 @@ export function SessionFlow({
 
   return (
     <div>
-      {phaseNav}
+      {topBar}
+      {progressBar}
       <div className="grid gap-6 md:grid-cols-[1fr_280px]">
       <div className="space-y-4">
         {error && (
@@ -740,17 +790,6 @@ export function SessionFlow({
             </ol>
           </nav>
         )}
-
-        <ProgressRail score={score} missing={missing} answered={answeredTotal} />
-
-        <LivePanel
-          live={live}
-          joinUrl={joinCode && typeof window !== "undefined" ? `${window.location.origin}/join/${joinCode}` : null}
-          clientName={clientName}
-          onGoLive={goLive}
-          onStop={stopLive}
-          busy={busy}
-        />
       </div>
       </div>
     </div>

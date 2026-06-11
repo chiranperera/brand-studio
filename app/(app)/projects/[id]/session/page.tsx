@@ -2,8 +2,14 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { emptyBrandData, withAssetReferences, type BrandDataObject } from "@/lib/brand-data";
 import type { InputType, Question } from "@/lib/question-engine";
+import { BANK } from "@/lib/question-bank";
 import { SessionFlow, type InitialAnswer } from "@/components/session/SessionFlow";
 import type { AnswerVal } from "@/components/session/InputArea";
+
+// Fallback option lists by field, so answered questions saved before options were
+// stored still show their choices (drawn from the standard bank).
+const BANK_OPTIONS: Record<string, string[]> = {};
+for (const q of BANK) if (q.field && q.options?.length) BANK_OPTIONS[q.field] = q.options;
 
 function toValue(answer: unknown): AnswerVal {
   if (answer == null) return "";
@@ -60,14 +66,18 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
 
   const initialAnswers: InitialAnswer[] = (answerRows ?? []).map((a) => {
     const row = a as Record<string, unknown>;
+    const field = (row.field_path as string) ?? undefined;
+    const stored = (row.options as string[] | null) ?? null;
+    // Use stored options; otherwise fall back to the standard list for that field.
+    const options = stored?.length ? stored : field ? BANK_OPTIONS[field] ?? [] : [];
     return {
       id: row.id as string,
       question: {
         section: (row.section as string) ?? "",
         question: row.question as string,
         inputType: (row.input_type as InputType) ?? "text",
-        field: (row.field_path as string) ?? undefined,
-        options: (row.options as string[] | null) ?? [], // restored so all options reappear on resume
+        field,
+        options,
       } satisfies Question,
       value: toValue(row.answer),
       note: (row.note as string) ?? "",
