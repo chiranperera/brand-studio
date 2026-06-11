@@ -98,11 +98,13 @@ export function SessionFlow({
   const [automation, setAutomation] = useState<Automation>(
     initialBrandData.automation ?? { needs: [], workflows: [] }
   );
+  const [deliverables, setDeliverables] = useState<string[]>(initialBrandData.deliverables ?? []);
   const [scopeData, setScopeData] = useState<ScopeData>({
     kinds: (initialBrandData.surfaces ?? []).map((s) => s.kind),
     sections: Array.from(new Set((initialBrandData.surfaces ?? []).flatMap((s) => s.screens))),
     features: Array.from(new Set((initialBrandData.surfaces ?? []).flatMap((s) => s.components))),
     needs: initialBrandData.automation?.needs ?? [],
+    deliverables: initialBrandData.deliverables ?? [],
     level: initialBrandData.automation?.level ?? "",
     workflows: (initialBrandData.automation?.workflows ?? []).join("\n"),
     notes: initialBrandData.automation?.notes ?? "",
@@ -133,6 +135,7 @@ export function SessionFlow({
     colorPalette: Swatch[];
     paletteName: string;
     savedPalettes: SavedPalette[];
+    deliverables: string[];
   }
 
   /** Rebuild brand_data by replaying every persisted answer (order-independent, edit-safe). */
@@ -147,6 +150,7 @@ export function SessionFlow({
     b.logo = { ...b.logo, preferredTypes: extra.logoTypes }; // logo-type picker
     b.surfaces = extra.surfaces; // scope picker
     b.automation = extra.automation; // scope picker
+    b.deliverables = extra.deliverables; // deliverables menu
     b.color = { ...b.color, savedPalettes: extra.savedPalettes }; // designer's named palettes
     if (extra.colorPalette.length) {
       // colour picker (editable + named)
@@ -173,6 +177,7 @@ export function SessionFlow({
     colorPalette,
     paletteName,
     savedPalettes,
+    deliverables,
   });
 
   /** Persist item `i` (insert or update), rebuild brand_data, return the updated items. */
@@ -267,7 +272,13 @@ export function SessionFlow({
     };
     setSurfaces(nextSurfaces);
     setAutomation(nextAutomation);
-    const b = rebuild(items, refLen, { ...currentExtras(), surfaces: nextSurfaces, automation: nextAutomation });
+    setDeliverables(d.deliverables);
+    const b = rebuild(items, refLen, {
+      ...currentExtras(),
+      surfaces: nextSurfaces,
+      automation: nextAutomation,
+      deliverables: d.deliverables,
+    });
     setBd(b);
     await persistBrand(b);
     setBusy(false);
@@ -374,7 +385,7 @@ export function SessionFlow({
     );
   }
 
-  function handleClientScope(key: "kinds" | "sections" | "features" | "needs", value: string) {
+  function handleClientScope(key: "kinds" | "sections" | "features" | "needs" | "deliverables", value: string) {
     lastActor.current = "client";
     setScopeData((prev) => ({
       ...prev,
@@ -510,6 +521,7 @@ export function SessionFlow({
           sections: scopeData.sections,
           features: scopeData.features,
           needs: scopeData.needs,
+          deliverables: scopeData.deliverables,
           level: scopeData.level,
           workflows: scopeData.workflows,
           notes: scopeData.notes,

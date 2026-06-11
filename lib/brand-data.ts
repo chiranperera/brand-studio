@@ -139,6 +139,9 @@ export interface BrandDataObject {
     notes?: string;
   };
 
+  // The design services/deliverables the client wants from the agency.
+  deliverables: string[];
+
   product?: {
     skus?: string;
     formats?: string;
@@ -196,6 +199,7 @@ export function emptyBrandData(seed?: Partial<BrandDataObject["project"]>): Bran
     imagery: { mode: [] },
     surfaces: [],
     automation: { needs: [], workflows: [] },
+    deliverables: [],
     references: [],
     constraints: {},
     meta: { completeness: 0, requiredMissing: [] },
@@ -235,6 +239,7 @@ export function normalizeBrandData(
     meta: { ...base.meta, ...r.meta },
     surfaces: r.surfaces ?? base.surfaces,
     references: r.references ?? base.references,
+    deliverables: r.deliverables ?? base.deliverables,
   };
 }
 
@@ -345,6 +350,7 @@ export const brandDataSchema = z.object({
     workflows: z.array(z.string()),
     notes: z.string().optional(),
   }),
+  deliverables: z.array(z.string()),
   product: z
     .object({
       skus: z.string().optional(),

@@ -21,12 +21,13 @@ export interface LiveScope {
   sections: string[];
   features: string[];
   needs: string[];
+  deliverables: string[];
   level: string;
   workflows: string;
   notes: string;
 }
 
-export type ScopeKey = "kinds" | "sections" | "features" | "needs";
+export type ScopeKey = "kinds" | "sections" | "features" | "needs" | "deliverables";
 
 /** The current step the host is on, pushed to the client. */
 export interface HostState {

@@ -4,7 +4,14 @@ import { useEffect, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { liveChannel, type HostState, type LiveValue, type ScopeKey } from "@/lib/live";
 import { LOGO_TYPES } from "@/lib/logo-types";
-import { WEBSITE_SECTIONS, WEBSITE_FEATURES, AUTOMATION_NEEDS, SURFACE_KINDS, AUTOMATION_LEVELS } from "@/lib/scope-options";
+import {
+  WEBSITE_SECTIONS,
+  WEBSITE_FEATURES,
+  AUTOMATION_NEEDS,
+  SURFACE_KINDS,
+  AUTOMATION_LEVELS,
+  DELIVERABLE_GROUPS,
+} from "@/lib/scope-options";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 
@@ -409,6 +416,28 @@ function ClientScope({
           onToggle={(v) => onToggle(g.key, v)}
         />
       ))}
+
+      <div className="card">
+        <span className="label">What can we design &amp; deliver?</span>
+        <div className="space-y-3">
+          {DELIVERABLE_GROUPS.map((g) => (
+            <div key={g.label}>
+              <div className="mb-1 text-xs text-ink-4">{g.label}</div>
+              <div className="flex flex-wrap gap-2">
+                {g.options.map((o) => (
+                  <button
+                    key={o}
+                    className={`chip ${scope.deliverables.includes(o) ? "chip-on" : ""}`}
+                    onClick={() => onToggle("deliverables", o)}
+                  >
+                    {o}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
 
       <div className="card">
         <span className="label">How much automation?</span>

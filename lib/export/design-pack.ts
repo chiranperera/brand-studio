@@ -110,6 +110,9 @@ Light/dark: ${bd.color.lightDark || "—"}. (Exact values live in tokens/brand.t
 ## Surfaces to design
 ${bd.surfaces.length ? bd.surfaces.map((s) => `- ${s.kind}`).join("\n") : "—"}
 
+## Deliverables to design
+${bd.deliverables?.length ? bd.deliverables.map((d) => `- ${d}`).join("\n") : "—"}
+
 ## Goals
 Primary: ${bd.goals.primary || "—"}. Measured by: ${list(bd.goals.metrics)}.
 `;

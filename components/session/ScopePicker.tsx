@@ -7,6 +7,7 @@ import {
   WEBSITE_FEATURES,
   AUTOMATION_NEEDS,
   AUTOMATION_LEVELS,
+  DELIVERABLE_GROUPS,
 } from "@/lib/scope-options";
 
 export interface ScopeData {
@@ -14,10 +15,13 @@ export interface ScopeData {
   sections: string[];
   features: string[];
   needs: string[];
+  deliverables: string[];
   level: string;
   workflows: string;
   notes: string;
 }
+
+type ScopeListKey = "kinds" | "sections" | "features" | "needs" | "deliverables";
 
 function ChipGroup({
   options,
@@ -97,7 +101,7 @@ export function ScopePicker({
   const [suggesting, setSuggesting] = useState(false);
   const [suggested, setSuggested] = useState(false);
   const fetched = useRef(false);
-  const toggle = (key: "kinds" | "sections" | "features" | "needs") => (o: string) =>
+  const toggle = (key: ScopeListKey) => (o: string) =>
     setD((s) => ({ ...s, [key]: s[key].includes(o) ? s[key].filter((x) => x !== o) : [...s[key], o] }));
 
   async function suggest() {
@@ -117,6 +121,7 @@ export function ScopePicker({
           sections: s.sections ?? prev.sections,
           features: s.features ?? prev.features,
           needs: s.needs ?? prev.needs,
+          deliverables: s.deliverables ?? prev.deliverables,
           level: s.level ?? prev.level,
         }));
         setSuggested(true);
@@ -221,6 +226,22 @@ export function ScopePicker({
             placeholder="Optional"
           />
         </div>
+      </div>
+
+      <div className="card space-y-4">
+        <div>
+          <h2 className="font-medium">What can we design &amp; deliver for you?</h2>
+          <p className="text-sm text-ink-3">
+            Everything we can design (we don&apos;t print, but we deliver print-ready files). Pick anything the client
+            might want.
+          </p>
+        </div>
+        {DELIVERABLE_GROUPS.map((g) => (
+          <div key={g.label}>
+            <span className="label">{g.label}</span>
+            <ChipGroup options={g.options} selected={d.deliverables} onToggle={toggle("deliverables")} />
+          </div>
+        ))}
       </div>
 
       <div className="flex items-center justify-between">
