@@ -29,7 +29,7 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
   // Ensure a session exists (created with the project, but be defensive).
   let { data: session } = await supabase
     .from("sessions")
-    .select("id, mode")
+    .select("id, mode, join_code")
     .eq("project_id", id)
     .order("created_at", { ascending: true })
     .limit(1)
@@ -38,7 +38,7 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
     const { data: created } = await supabase
       .from("sessions")
       .insert({ project_id: id, mode: "ai" })
-      .select("id, mode")
+      .select("id, mode, join_code")
       .single();
     session = created!;
   }
@@ -87,6 +87,7 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
         initialBrandData={bd}
         initialAnswers={initialAnswers}
         initialAssets={assets ?? []}
+        initialJoinCode={(session.join_code as string | null) ?? null}
       />
     </div>
   );

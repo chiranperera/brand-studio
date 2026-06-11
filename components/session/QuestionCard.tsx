@@ -19,6 +19,7 @@ export function QuestionCard({
   showSkip,
   onRegenerate,
   busy,
+  clientPicks,
 }: {
   question: Question;
   index: number;
@@ -35,6 +36,7 @@ export function QuestionCard({
   showSkip: boolean;
   onRegenerate?: () => void;
   busy: boolean;
+  clientPicks?: string[];
 }) {
   const empty =
     value === "" ||
@@ -63,7 +65,13 @@ export function QuestionCard({
       >
         {/* key by question so InputArea's internal "Add another / Other" text
             resets per question instead of carrying over to the next one. */}
-        <InputArea key={`${index}-${question.field ?? question.question}`} question={question} value={value} onChange={onChange} />
+        <InputArea
+          key={`${index}-${question.field ?? question.question}`}
+          question={question}
+          value={value}
+          onChange={onChange}
+          clientPicks={clientPicks}
+        />
         <div className="mt-4">
           <input
             className="input text-sm"

@@ -11,7 +11,10 @@ import { QuestionCard } from "./QuestionCard";
 import { ProgressRail } from "./ProgressRail";
 import { LogoTypePicker } from "./LogoTypePicker";
 import { ScopePicker, type ScopeData } from "./ScopePicker";
+import { LivePanel } from "./LivePanel";
 import { ReferenceUpload } from "@/components/projects/ReferenceUpload";
+import { liveChannel, makeJoinCode, type Actor, type ClientSelect, type HostState, type LiveValue } from "@/lib/live";
+import type { RealtimeChannel } from "@supabase/supabase-js";
 import type { AnswerVal } from "./InputArea";
 
 type Phase = "questions" | "scope" | "logo" | "done";
@@ -52,6 +55,7 @@ export function SessionFlow({
   initialBrandData,
   initialAnswers,
   initialAssets,
+  initialJoinCode,
 }: {
   projectId: string;
   sessionId: string;
@@ -59,6 +63,7 @@ export function SessionFlow({
   initialBrandData: BrandDataObject;
   initialAnswers: InitialAnswer[];
   initialAssets: SessionAsset[];
+  initialJoinCode: string | null;
 }) {
   const [items, setItems] = useState<Item[]>(
     initialAnswers.map((a) => ({ id: a.id, question: a.question, value: a.value, note: a.note }))
@@ -77,6 +82,15 @@ export function SessionFlow({
   const [showRefs, setShowRefs] = useState(false);
   const [dirty, setDirty] = useState(false);
   const started = useRef(false);
+
+  // ----- live multi-device session (Phase 3) -----
+  const [live, setLive] = useState(false);
+  const [joinCode, setJoinCode] = useState<string | null>(initialJoinCode);
+  const [clientName, setClientName] = useState<string | null>(null);
+  const [clientPicks, setClientPicks] = useState<string[]>([]); // client-attributed values on the current question
+  const channelRef = useRef<RealtimeChannel | null>(null);
+  const lastActor = useRef<Actor>("host");
+  const posRef = useRef(0);
 
   const { score, missing } = computeCompleteness(bd);
   const refCount = refLen;
@@ -112,27 +126,34 @@ export function SessionFlow({
     const supabase = createClient();
     const it = its[i];
     const ans = isEmpty(it.value) ? null : it.value;
+    const actor = lastActor.current;
     let id = it.id;
     if (id) {
-      await supabase.from("answers").update({ answer: ans as never, note: it.note || null }).eq("id", id);
+      const up = { answer: ans as never, note: it.note || null, actor };
+      const { error } = await supabase.from("answers").update(up).eq("id", id);
+      // Fall back if the `actor` column isn't present yet (migration 0002).
+      if (error && /actor/i.test(error.message)) {
+        await supabase.from("answers").update({ answer: ans as never, note: it.note || null }).eq("id", id);
+      }
     } else {
-      const { data } = await supabase
-        .from("answers")
-        .insert({
-          session_id: sessionId,
-          project_id: projectId,
-          field_path: it.question.field ?? null,
-          section: it.question.section,
-          question: it.question.question,
-          input_type: it.question.inputType,
-          answer: ans as never,
-          note: it.note || null,
-          position: i,
-        })
-        .select("id")
-        .single();
-      id = data?.id;
+      const base = {
+        session_id: sessionId,
+        project_id: projectId,
+        field_path: it.question.field ?? null,
+        section: it.question.section,
+        question: it.question.question,
+        input_type: it.question.inputType,
+        answer: ans as never,
+        note: it.note || null,
+        position: i,
+      };
+      let res = await supabase.from("answers").insert({ ...base, actor }).select("id").single();
+      if (res.error && /actor/i.test(res.error.message)) {
+        res = await supabase.from("answers").insert(base).select("id").single();
+      }
+      id = res.data?.id;
     }
+    lastActor.current = "host";
     const next = its.map((x, idx) => (idx === i ? { ...it, id } : x));
     setItems(next);
     const b = rebuild(next, refLen, currentExtras());
@@ -245,9 +266,103 @@ export function SessionFlow({
   }, []);
 
   function patchCurrent(patch: Partial<Item>) {
+    lastActor.current = "host";
     setItems((prev) => prev.map((x, idx) => (idx === pos ? { ...x, ...patch } : x)));
     setDirty(true);
   }
+
+  // ----- live session wiring -----
+  function handleClientSelect(value: LiveValue) {
+    lastActor.current = "client";
+    const arr = Array.isArray(value) ? value.map(String) : value != null && value !== "" ? [String(value)] : [];
+    setClientPicks(arr);
+    setItems((prev) => prev.map((x, idx) => (idx === posRef.current ? { ...x, value: value as AnswerVal } : x)));
+    setDirty(true);
+  }
+
+  async function goLive() {
+    setBusy(true);
+    let code = joinCode;
+    if (!code) {
+      code = makeJoinCode();
+      const supabase = createClient();
+      await supabase.from("sessions").update({ join_code: code }).eq("id", sessionId);
+      setJoinCode(code);
+    }
+    setLive(true);
+    setBusy(false);
+  }
+
+  function stopLive() {
+    setLive(false);
+    setClientName(null);
+  }
+
+  // Track current position for the client-select handler; reset attribution per question.
+  useEffect(() => {
+    posRef.current = pos;
+    setClientPicks([]);
+  }, [pos]);
+
+  // Subscribe to the live channel while live.
+  useEffect(() => {
+    if (!live || !joinCode) return;
+    const supabase = createClient();
+    const ch = supabase.channel(liveChannel(joinCode), { config: { presence: { key: "host" } } });
+    channelRef.current = ch;
+    ch.on("broadcast", { event: "client_select" }, ({ payload }) =>
+      handleClientSelect((payload as ClientSelect).value)
+    );
+    ch.on("presence", { event: "sync" }, () => {
+      const st = ch.presenceState() as Record<string, { role?: string; name?: string }[]>;
+      let name: string | null = null;
+      Object.values(st)
+        .flat()
+        .forEach((p) => {
+          if (p.role === "client") name = p.name || "Client";
+        });
+      setClientName(name);
+    });
+    ch.subscribe((status) => {
+      if (status === "SUBSCRIBED") void ch.track({ role: "host" });
+    });
+    return () => {
+      void supabase.removeChannel(ch);
+      channelRef.current = null;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [live, joinCode]);
+
+  // Broadcast the current step to the client whenever it changes.
+  useEffect(() => {
+    const ch = channelRef.current;
+    if (!live || !ch) return;
+    const cur = items[pos];
+    const state: HostState =
+      phase === "questions" && cur
+        ? {
+            kind: "question",
+            question: {
+              section: cur.question.section,
+              question: cur.question.question,
+              help: cur.question.help,
+              inputType: cur.question.inputType,
+              options: cur.question.options,
+              field: cur.question.field,
+            },
+            value: cur.value as LiveValue,
+            clientPicks,
+            index: pos,
+            total: items.length,
+          }
+        : {
+            kind: phase === "scope" ? "scope" : phase === "logo" ? "logo" : "done",
+            title:
+              phase === "scope" ? "Scope & requirements" : phase === "logo" ? "Logo types" : "Session complete",
+          };
+    void ch.send({ type: "broadcast", event: "host_state", payload: state });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [live, phase, pos, items, clientPicks]);
 
   async function commitIfDirty() {
     if (dirty && items[pos]?.id) {
@@ -431,6 +546,7 @@ export function SessionFlow({
             showSkip={!current.id}
             onRegenerate={mode === "ai" && !current.id ? () => void loadNext(items.slice(0, pos)) : undefined}
             busy={busy}
+            clientPicks={live ? clientPicks : undefined}
           />
         ) : (
           <div className="card text-ink-3">{busy ? "Generating the first question…" : "Loading…"}</div>
@@ -465,6 +581,14 @@ export function SessionFlow({
       </div>
 
       <div className="space-y-4 md:sticky md:top-20 md:h-fit">
+        <LivePanel
+          live={live}
+          joinUrl={joinCode && typeof window !== "undefined" ? `${window.location.origin}/join/${joinCode}` : null}
+          clientName={clientName}
+          onGoLive={goLive}
+          onStop={stopLive}
+          busy={busy}
+        />
         <ProgressRail score={score} missing={missing} answered={answeredTotal} />
 
         {items.length > 0 && (

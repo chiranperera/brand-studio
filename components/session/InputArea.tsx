@@ -9,12 +9,21 @@ export function InputArea({
   question,
   value,
   onChange,
+  clientPicks,
 }: {
   question: Question;
   value: AnswerVal;
   onChange: (v: AnswerVal) => void;
+  clientPicks?: string[]; // values the client (not the host) selected — coloured distinctly
 }) {
   const [other, setOther] = useState("");
+  // A chip's classes given whether it's selected and who selected it.
+  const chipClass = (o: string, selected: boolean) => {
+    const byClient = clientPicks?.includes(o);
+    if (selected && byClient) return "chip border-sky-400 bg-sky-400/10 text-ink ring-1 ring-sky-400";
+    if (byClient) return "chip ring-1 ring-sky-400";
+    return `chip ${selected ? "chip-on" : ""}`;
+  };
 
   switch (question.inputType) {
     case "textarea":
@@ -63,12 +72,7 @@ export function InputArea({
         <div className="space-y-3">
           <div className="flex flex-wrap gap-2">
             {opts.map((o) => (
-              <button
-                key={o}
-                type="button"
-                className={`chip ${value === o ? "chip-on" : ""}`}
-                onClick={() => onChange(o)}
-              >
+              <button key={o} type="button" className={chipClass(o, value === o)} onClick={() => onChange(o)}>
                 {o}
               </button>
             ))}
@@ -98,12 +102,7 @@ export function InputArea({
         <div className="space-y-3">
           <div className="flex flex-wrap gap-2">
             {opts.map((o) => (
-              <button
-                key={o}
-                type="button"
-                className={`chip ${arr.includes(o) ? "chip-on" : ""}`}
-                onClick={() => toggle(o)}
-              >
+              <button key={o} type="button" className={chipClass(o, arr.includes(o))} onClick={() => toggle(o)}>
                 {o}
               </button>
             ))}
