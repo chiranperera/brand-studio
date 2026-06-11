@@ -18,21 +18,42 @@ const ABOUT = new Map(FIELD_PATHS.map((f) => [f.path, f.about]));
  * When the pool is exhausted the session completes.
  */
 export const ASK_POOL: string[] = [
+  // Business & strategy
   "business.type",
   "business.description",
   "business.offerings",
+  "business.differentiator",
+  "business.story",
   "business.stage",
+  "context.currentSite",
+  "context.presenceGaps",
+  // Audience
   "audience.segments",
+  "audience.demographics",
   "audience.b2x",
+  "audience.painPoints",
   "audience.jobsToBeDone",
+  // Goals & market
   "goals.primary",
   "goals.metrics",
   "goals.blocker",
+  "market.competitors",
+  "market.positioning",
+  // Purpose, future & commercial
+  "brand.mission",
+  "brand.vision",
+  "brand.values",
+  "context.timeline",
+  "context.budget",
+  "context.decisionMakers",
+  // Brand personality & voice
   "brand.personality",
   "brand.archetype",
+  "brand.keywords",
   "voice.person",
   "voice.emoji",
   "logo.notes",
+  // Colour, type & imagery
   "color.direction",
   "color.lightDark",
   "type.displayFeel",
@@ -41,8 +62,6 @@ export const ASK_POOL: string[] = [
   "visualStyle.moodWords",
   "imagery.mode",
   "imagery.iconStyle",
-  "constraints.stack",
-  "constraints.accessibility",
 ];
 
 /**
@@ -109,16 +128,15 @@ export interface HistoryItem {
 
 /** Canonical topic areas (carried over, expanded with the brand & design track). */
 export const TOPICS = [
-  "Business & Brand",
+  "Business & Strategy",
+  "Differentiation & Story",
   "Target Audience",
-  "Goals & Success",
+  "Goals & Market",
+  "Purpose & Future",
+  "Commercials",
   "Brand Personality & Voice",
-  "Logo & Identity",
-  "Color & Typography",
+  "Colour & Typography",
   "Visual Style & Imagery",
-  "Surfaces & Screens",
-  "References & Inspiration",
-  "Constraints & Practicalities",
 ];
 
 export const QUESTION_SCHEMA = {
@@ -162,9 +180,8 @@ export function buildPrompt({
 
   const allowedList = allowed.map((f) => `- ${f.path} — ${f.about}`).join("\n");
   const ind = industry || "general";
-  const canComplete = requiredRemaining.length === 0;
 
-  return `You are an expert brand & design discovery interviewer for a one-person AI-native creative studio. You are interviewing a prospective client to capture a complete, structured brand brief that will auto-generate a design system, logo direction, brand guidelines, and a website. Every answer must map to a typed field.
+  return `You are a senior brand strategist running a live discovery session for a one-person AI-native creative studio. You are interviewing a prospective client to capture a deep, structured brand brief that will auto-generate a design system, logo direction, brand guidelines, and a website. This is a real consulting conversation — go deeper than a generic form. Every answer maps to one typed field.
 
 CLIENT: ${client}
 CONTACT: ${contact || "unknown"}
@@ -177,18 +194,20 @@ FIELDS ALREADY ASKED — NEVER ask about these again, not even reworded or from 
 ${asked.length ? asked.map((a) => `- ${a}`).join("\n") : "(none yet)"}
 
 ASK NEXT — choose "field" from EXACTLY this list of not-yet-asked fields (nothing else is allowed):
-${allowedList || "(none left — set interviewComplete: true)"}
+${allowedList || "(none left)"}
 
-${requiredRemaining.length ? `STILL REQUIRED (ask one of these first): ${requiredRemaining.join(", ")}.` : "All required fields are covered."}
+${requiredRemaining.length ? `PRIORITISE these still-needed fields: ${requiredRemaining.join(", ")}.` : ""}
 
 TASK: Produce the SINGLE best NEXT question to ask, as JSON.
+QUALITY (this is what separates a real strategist from a form):
+- Make it SPECIFIC to ${client} and the ${ind} industry, building on what they've already said — reference their actual answers where natural. Never generic.
+- Capture the WHY, not just the what — get at motivation, differentiation, and feeling (e.g. "what should customers FEEL when they find you?", "why do customers pick you over X?").
+- One question = one field. Pick "field" from the ASK NEXT list ONLY. Never repeat or reword an already-asked topic.
 RULES:
-- Pick "field" from the ASK NEXT list ONLY. It is the field this answer fills. One question = one field. Never choose a field from the ALREADY ASKED list.
-- Do NOT ask anything that overlaps in meaning with a question already in the conversation, even if worded differently or expecting the same answer. If a topic is covered, move on.
-- KEEP THE QUESTION SHORT: one plain sentence, ideally under 12 words, no preamble, readable aloud. Personalize to the ${ind} industry and prior answers.
-- "Show, don't ask": DEFAULT to "multiselect". Use "select" only when mutually exclusive (product/service/hybrid, light/dark, yes/no). "rating" for 1-5 importance. "text" for a tiny fact. "textarea" only when an open story is essential — keep rare.
-- For "select"/"multiselect", ALWAYS provide 4-8 CONCRETE options specific to the ${ind} industry, in plain language.
+- KEEP IT SHORT: one plain sentence, readable aloud, no preamble.
+- "Show, don't ask": DEFAULT to "multiselect". Use "select" only when mutually exclusive. "rating" for 1-5 importance. "text" for a tiny fact (a URL, a budget figure). "textarea" only for a genuine open story (mission, differentiation, the #1 goal) — these deeper fields deserve textarea.
+- For "select"/"multiselect", ALWAYS give 4-8 CONCRETE options tailored to the ${ind} industry, in plain language. The client can add their own.
 - "section" must be one of: ${TOPICS.join("; ")}. "help" is an optional ≤8-word hint.
-- interviewComplete: ${canComplete ? 'you MAY set this true to finish now (all required fields covered); otherwise false and ask a remaining field.' : "false — required fields above are still needed."}${retryNote ? `\n- IMPORTANT: ${retryNote}` : ""}
+- interviewComplete: false — keep asking; the session ends on its own when the topics are exhausted.${retryNote ? `\n- IMPORTANT: ${retryNote}` : ""}
 Return ONLY the JSON object.`;
 }

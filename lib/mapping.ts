@@ -55,6 +55,19 @@ export const FIELD_PATHS: { path: string; about: string }[] = [
   { path: "constraints.localization", about: "languages / RTL" },
   { path: "constraints.stack", about: "tech stack / CMS constraints" },
   { path: "constraints.compliance", about: "compliance/legal" },
+  // strategy depth
+  { path: "business.differentiator", about: "USP — why customers choose them over rivals" },
+  { path: "business.story", about: "origin story — how/why it started" },
+  { path: "audience.demographics", about: "age, location, income, role of the ideal customer" },
+  { path: "audience.painPoints", about: "the customer's biggest frustrations/fears" },
+  { path: "brand.mission", about: "why the business exists (purpose)" },
+  { path: "brand.values", about: "core values the brand stands for" },
+  { path: "brand.vision", about: "where the brand is headed in 2-3 years" },
+  { path: "context.currentSite", about: "current website / socials URL" },
+  { path: "context.presenceGaps", about: "what isn't working with their current presence" },
+  { path: "context.timeline", about: "deadline / launch timeline" },
+  { path: "context.budget", about: "budget range for the project" },
+  { path: "context.decisionMakers", about: "who else approves the project" },
 ];
 
 export const FIELD_PATH_SET = new Set(FIELD_PATHS.map((f) => f.path));
@@ -352,6 +365,48 @@ export function writeField(bd: BrandDataObject, path: string, value: AnswerValue
       break;
     case "constraints.compliance":
       next.constraints.compliance = asString(value);
+      break;
+
+    case "business.differentiator":
+      next.business.differentiator = asString(value);
+      break;
+    case "business.story":
+      next.business.story = asString(value);
+      break;
+    case "audience.demographics":
+      next.audience.demographics = asString(value);
+      break;
+    case "audience.painPoints":
+      next.audience.painPoints = asString(value);
+      break;
+    case "brand.mission":
+      next.brand.mission = asString(value);
+      break;
+    case "brand.values":
+      next.brand.values = mergeList(next.brand.values ?? [], asStringArray(value));
+      break;
+    case "brand.vision":
+      next.brand.vision = asString(value);
+      break;
+    case "context.currentSite":
+      next.context = next.context ?? {};
+      next.context.currentSite = asString(value);
+      break;
+    case "context.presenceGaps":
+      next.context = next.context ?? {};
+      next.context.presenceGaps = asString(value);
+      break;
+    case "context.timeline":
+      next.context = next.context ?? {};
+      next.context.timeline = asString(value);
+      break;
+    case "context.budget":
+      next.context = next.context ?? {};
+      next.context.budget = asString(value);
+      break;
+    case "context.decisionMakers":
+      next.context = next.context ?? {};
+      next.context.decisionMakers = asString(value);
       break;
 
     default:

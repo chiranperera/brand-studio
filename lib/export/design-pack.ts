@@ -73,9 +73,19 @@ export function fallbackBrief(bd: BrandDataObject): string {
 ## Snapshot
 ${bd.business.description || "—"}
 Type: ${bd.business.type || "—"}. Sells: ${list(offerings)}.
+What makes them different: ${bd.business.differentiator || "—"}.
+${bd.business.story ? `Story: ${bd.business.story}` : ""}
+
+## Purpose
+Mission: ${bd.brand?.mission || "—"}. Vision: ${bd.brand?.vision || "—"}.
+Values: ${list(bd.brand?.values ?? [])}.
 
 ## Audience
-For: ${list(segments)} (${bd.audience.b2x || "—"}). Jobs to be done: ${list(bd.audience.jobsToBeDone)}.
+For: ${list(segments)} (${bd.audience.b2x || "—"}). ${bd.audience.demographics ? `Demographics: ${bd.audience.demographics}.` : ""}
+Jobs to be done: ${list(bd.audience.jobsToBeDone)}. ${bd.audience.painPoints ? `Pain points: ${bd.audience.painPoints}.` : ""}
+
+## Market
+Competitors: ${list(bd.market.competitors.map((c) => c.name))}. Positioning: ${list(bd.market.positioning.map((p) => p.value))}.
 
 ## Brand personality & archetype
 Archetype: ${bd.brand.archetype || "—"}. Personality: ${list(personality)}.

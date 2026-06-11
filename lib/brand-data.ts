@@ -46,14 +46,18 @@ export interface BrandDataObject {
     type?: "product" | "service" | "hybrid";
     description?: string;
     offerings: Offering[];
+    differentiator?: string; // USP — why customers choose them
+    story?: string; // how it started / origin
     stage?: string;
     model?: string;
   };
 
   audience: {
     segments: Segment[];
+    demographics?: string; // age/location/income/role
     b2x?: "B2B" | "B2C" | "both";
     jobsToBeDone: string[];
+    painPoints?: string;
   };
 
   goals: {
@@ -71,6 +75,18 @@ export interface BrandDataObject {
     personality: { trait: string; score: number }[];
     archetype?: string;
     keywords: string[];
+    mission?: string; // why the business exists
+    values: string[]; // core values
+    vision?: string; // where it's headed
+  };
+
+  // Strategy / commercial context captured in discovery.
+  context: {
+    currentSite?: string;
+    presenceGaps?: string; // what isn't working today
+    timeline?: string;
+    budget?: string;
+    decisionMakers?: string;
   };
 
   voice: {
@@ -168,7 +184,8 @@ export function emptyBrandData(seed?: Partial<BrandDataObject["project"]>): Bran
     audience: { segments: [], jobsToBeDone: [] },
     goals: { metrics: [] },
     market: { competitors: [], positioning: [] },
-    brand: { personality: [], keywords: [] },
+    brand: { personality: [], keywords: [], values: [] },
+    context: {},
     voice: { examples: [] },
     logo: { preferredTypes: [], avoid: [] },
     color: { locked: [], chosenPalette: [] },
@@ -201,13 +218,17 @@ export const brandDataSchema = z.object({
     type: z.enum(["product", "service", "hybrid"]).optional(),
     description: z.string().optional(),
     offerings: z.array(offering),
+    differentiator: z.string().optional(),
+    story: z.string().optional(),
     stage: z.string().optional(),
     model: z.string().optional(),
   }),
   audience: z.object({
     segments: z.array(segment),
+    demographics: z.string().optional(),
     b2x: z.enum(["B2B", "B2C", "both"]).optional(),
     jobsToBeDone: z.array(z.string()),
+    painPoints: z.string().optional(),
   }),
   goals: z.object({
     primary: z.string().optional(),
@@ -224,6 +245,16 @@ export const brandDataSchema = z.object({
     personality: z.array(z.object({ trait: z.string(), score: z.number() })),
     archetype: z.string().optional(),
     keywords: z.array(z.string()),
+    mission: z.string().optional(),
+    values: z.array(z.string()),
+    vision: z.string().optional(),
+  }),
+  context: z.object({
+    currentSite: z.string().optional(),
+    presenceGaps: z.string().optional(),
+    timeline: z.string().optional(),
+    budget: z.string().optional(),
+    decisionMakers: z.string().optional(),
   }),
   voice: z.object({
     formality: z.number().optional(),

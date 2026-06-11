@@ -4,8 +4,8 @@ import { gemini, parseJson } from "@/lib/gemini";
 import {
   buildPrompt,
   QUESTION_SCHEMA,
-  unmetRequiredGroups,
-  describe,
+  availableFields,
+  requiredRemaining,
   type Question,
   type HistoryItem,
 } from "@/lib/question-engine";
@@ -60,17 +60,13 @@ export async function POST(req: Request) {
   // Fields already asked (the dedup key): never offer or accept these again.
   const asked = new Set<string>((answers ?? []).map((a) => a.field_path).filter((f): f is string => !!f));
 
-  // Finish as soon as every required category is covered (the session stops at
-  // 100% rather than asking endless extra questions).
-  const unmet = unmetRequiredGroups(asked);
-  if (unmet.length === 0) return NextResponse.json({ question: COMPLETE });
+  // Ask through the full discovery pool, deduped. The session ends only when the
+  // pool is exhausted; required fields are prioritised so 100% is reached early.
+  const allowed = availableFields(asked);
+  if (allowed.length === 0) return NextResponse.json({ question: COMPLETE });
 
-  // Ask only still-needed required fields (both alternatives of a group are
-  // valid choices); each is asked once, so questions never repeat.
-  const allowedPaths = unmet.flat().filter((p) => !asked.has(p));
-  const allowed = describe(allowedPaths);
-  const reqRemaining = unmet.map((g) => g[0]);
-  const allowedSet = new Set(allowedPaths);
+  const reqRemaining = requiredRemaining(asked);
+  const allowedSet = new Set(allowed.map((a) => a.path));
   const base = {
     client: project.client_name,
     contact: project.contact_name ?? undefined,
@@ -89,12 +85,13 @@ export async function POST(req: Request) {
       const raw = await gemini(buildPrompt({ ...base, retryNote }), QUESTION_SCHEMA as unknown as Record<string, unknown>);
       const q = parseJson<Question>(raw);
 
-      // Premature completion (required fields still open) — force another question.
-      if (q.interviewComplete && reqRemaining.length > 0) {
-        retryNote = `Do NOT finish yet — these required fields are still unasked: ${reqRemaining.join(", ")}. Ask one of them.`;
+      // The AI doesn't decide completion — the route ends when the pool is empty.
+      if (q.interviewComplete) {
+        retryNote = `Do NOT finish — there are still topics to cover. Ask about one of: ${
+          reqRemaining.length ? reqRemaining.join(", ") : allowed.slice(0, 5).map((a) => a.path).join(", ")
+        }.`;
         continue;
       }
-      if (q.interviewComplete) return NextResponse.json({ question: q });
 
       // Repeat / out-of-list field — reject and retry.
       if (!q.field || !allowedSet.has(q.field)) {
