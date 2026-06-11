@@ -22,6 +22,8 @@ export interface LiveScope {
   features: string[];
   needs: string[];
   level: string;
+  workflows: string;
+  notes: string;
 }
 
 export type ScopeKey = "kinds" | "sections" | "features" | "needs";
@@ -62,6 +64,17 @@ export interface ClientLogo {
 /** Client toggled a scope chip. */
 export interface ClientScope {
   key: ScopeKey;
+  value: string;
+}
+
+/** Client chose the automation level. */
+export interface ClientScopeLevel {
+  level: string;
+}
+
+/** Client edited a free-text scope field. */
+export interface ClientScopeText {
+  key: "workflows" | "notes";
   value: string;
 }
 

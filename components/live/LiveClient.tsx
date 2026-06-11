@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { liveChannel, type HostState, type LiveValue, type ScopeKey } from "@/lib/live";
 import { LOGO_TYPES } from "@/lib/logo-types";
-import { WEBSITE_SECTIONS, WEBSITE_FEATURES, AUTOMATION_NEEDS, SURFACE_KINDS } from "@/lib/scope-options";
+import { WEBSITE_SECTIONS, WEBSITE_FEATURES, AUTOMATION_NEEDS, SURFACE_KINDS, AUTOMATION_LEVELS } from "@/lib/scope-options";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 
@@ -84,6 +84,26 @@ export function LiveClient({ code }: { code: string }) {
   function sendScope(key: ScopeKey, value: string) {
     void channelRef.current?.send({ type: "broadcast", event: "client_scope", payload: { key, value } });
   }
+  function sendScopeLevel(level: string) {
+    void channelRef.current?.send({ type: "broadcast", event: "client_scope_level", payload: { level } });
+  }
+  function sendScopeText(key: "workflows" | "notes", value: string) {
+    void channelRef.current?.send({ type: "broadcast", event: "client_scope_text", payload: { key, value } });
+  }
+
+  // Keep asking for the current step until we have it (covers missed broadcasts /
+  // reconnects), and re-request when the tab regains focus.
+  useEffect(() => {
+    if (!joined || ended) return;
+    const ask = () => void channelRef.current?.send({ type: "broadcast", event: "request_state", payload: {} });
+    const t = state ? null : setInterval(ask, 2500);
+    const onVis = () => document.visibilityState === "visible" && ask();
+    document.addEventListener("visibilitychange", onVis);
+    return () => {
+      if (t) clearInterval(t);
+      document.removeEventListener("visibilitychange", onVis);
+    };
+  }, [joined, ended, state]);
 
   if (ended) {
     return (
@@ -144,7 +164,7 @@ export function LiveClient({ code }: { code: string }) {
       ) : state.kind === "logo" && state.logo ? (
         <ClientLogo logo={state.logo} onSelect={sendLogo} />
       ) : state.kind === "scope" && state.scope ? (
-        <ClientScope scope={state.scope} onToggle={sendScope} />
+        <ClientScope scope={state.scope} onToggle={sendScope} onLevel={sendScopeLevel} onText={sendScopeText} />
       ) : (
         <div className="card text-center">
           <h2 className="text-lg font-medium">{state.title}</h2>
@@ -304,41 +324,134 @@ function ClientLogo({ logo, onSelect }: { logo: NonNullable<HostState["logo"]>; 
   );
 }
 
+function ClientChipGroup({
+  label,
+  options,
+  selected,
+  onToggle,
+}: {
+  label: string;
+  options: string[];
+  selected: string[];
+  onToggle: (value: string) => void;
+}) {
+  const [custom, setCustom] = useState("");
+  const all = Array.from(new Set([...options, ...selected]));
+  const add = () => {
+    const v = custom.trim();
+    if (v && !selected.includes(v)) onToggle(v);
+    setCustom("");
+  };
+  return (
+    <div className="card">
+      <span className="label">{label}</span>
+      <div className="flex flex-wrap gap-2">
+        {all.map((o) => (
+          <button key={o} className={`chip ${selected.includes(o) ? "chip-on" : ""}`} onClick={() => onToggle(o)}>
+            {o}
+          </button>
+        ))}
+      </div>
+      <div className="mt-2 flex gap-2">
+        <input
+          className="input text-sm"
+          placeholder="Add your own…"
+          value={custom}
+          onChange={(e) => setCustom(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              add();
+            }
+          }}
+        />
+        <button className="btn-ghost shrink-0" onClick={add}>
+          Add
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function ClientScope({
   scope,
   onToggle,
+  onLevel,
+  onText,
 }: {
   scope: NonNullable<HostState["scope"]>;
   onToggle: (key: ScopeKey, value: string) => void;
+  onLevel: (level: string) => void;
+  onText: (key: "workflows" | "notes", value: string) => void;
 }) {
+  // Local text state so realtime echoes don't reset the cursor while typing.
+  const [wf, setWf] = useState(scope.workflows);
+  const [nt, setNt] = useState(scope.notes);
   const groups: { key: ScopeKey; label: string; options: string[] }[] = [
-    { key: "kinds", label: "What are we building?", options: Array.from(new Set([...SURFACE_KINDS, ...scope.kinds])) },
-    { key: "sections", label: "Sections / pages", options: Array.from(new Set([...WEBSITE_SECTIONS, ...scope.sections])) },
-    { key: "features", label: "Features", options: Array.from(new Set([...WEBSITE_FEATURES, ...scope.features])) },
-    { key: "needs", label: "AI automation", options: Array.from(new Set([...AUTOMATION_NEEDS, ...scope.needs])) },
+    { key: "kinds", label: "What are we building?", options: SURFACE_KINDS },
+    { key: "sections", label: "Sections / pages", options: WEBSITE_SECTIONS },
+    { key: "features", label: "Features", options: WEBSITE_FEATURES },
+    { key: "needs", label: "AI automation", options: AUTOMATION_NEEDS },
   ];
   return (
     <div className="space-y-4">
       <div className="text-center">
         <h2 className="text-xl font-semibold">What should we build?</h2>
-        <p className="text-sm text-ink-3">Tap what you&apos;d like — your designer fills in the rest.</p>
+        <p className="text-sm text-ink-3">Tap what you&apos;d like — add your own too.</p>
       </div>
+
       {groups.map((g) => (
-        <div key={g.key} className="card">
-          <span className="label">{g.label}</span>
-          <div className="flex flex-wrap gap-2">
-            {g.options.map((o) => (
-              <button
-                key={o}
-                className={`chip ${scope[g.key].includes(o) ? "chip-on" : ""}`}
-                onClick={() => onToggle(g.key, o)}
-              >
-                {o}
-              </button>
-            ))}
-          </div>
-        </div>
+        <ClientChipGroup
+          key={g.key}
+          label={g.label}
+          options={g.options}
+          selected={scope[g.key]}
+          onToggle={(v) => onToggle(g.key, v)}
+        />
       ))}
+
+      <div className="card">
+        <span className="label">How much automation?</span>
+        <div className="space-y-2">
+          {AUTOMATION_LEVELS.map((l) => (
+            <button
+              key={l}
+              onClick={() => onLevel(l)}
+              className={`block w-full rounded-lg border px-3 py-2 text-left text-sm ${
+                scope.level === l ? "border-accent bg-accent/10 text-ink" : "border-line text-ink-2"
+              }`}
+            >
+              {l}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="card">
+        <span className="label">Biggest time-sinks to automate (one per line)</span>
+        <textarea
+          className="input min-h-20"
+          placeholder="e.g. answering the same questions all day"
+          value={wf}
+          onChange={(e) => {
+            setWf(e.target.value);
+            onText("workflows", e.target.value);
+          }}
+        />
+      </div>
+
+      <div className="card">
+        <span className="label">Anything else about scope?</span>
+        <input
+          className="input"
+          placeholder="Optional"
+          value={nt}
+          onChange={(e) => {
+            setNt(e.target.value);
+            onText("notes", e.target.value);
+          }}
+        />
+      </div>
     </div>
   );
 }

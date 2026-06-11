@@ -20,6 +20,8 @@ import {
   type ClientSelect,
   type ClientLogo,
   type ClientScope,
+  type ClientScopeLevel,
+  type ClientScopeText,
   type HostState,
   type LiveValue,
 } from "@/lib/live";
@@ -318,6 +320,16 @@ export function SessionFlow({
     }));
   }
 
+  function handleClientScopeLevel(level: string) {
+    lastActor.current = "client";
+    setScopeData((prev) => ({ ...prev, level }));
+  }
+
+  function handleClientScopeText(key: "workflows" | "notes", value: string) {
+    lastActor.current = "client";
+    setScopeData((prev) => ({ ...prev, [key]: value }));
+  }
+
   async function goLive() {
     setBusy(true);
     let code = joinCode;
@@ -363,6 +375,13 @@ export function SessionFlow({
       const p = payload as ClientScope;
       handleClientScope(p.key, p.value);
     });
+    ch.on("broadcast", { event: "client_scope_level" }, ({ payload }) =>
+      handleClientScopeLevel((payload as ClientScopeLevel).level)
+    );
+    ch.on("broadcast", { event: "client_scope_text" }, ({ payload }) => {
+      const p = payload as ClientScopeText;
+      handleClientScopeText(p.key, p.value);
+    });
     // A (re)joining client asks for the current step — replay it.
     ch.on("broadcast", { event: "request_state" }, () => {
       if (lastStateRef.current) void ch.send({ type: "broadcast", event: "host_state", payload: lastStateRef.current });
@@ -384,7 +403,13 @@ export function SessionFlow({
     ch.subscribe((status) => {
       if (status === "SUBSCRIBED") void ch.track({ role: "host" });
     });
+    // Heartbeat: re-send the current step every 8s so the channel stays warm
+    // (no idle drop) and any (re)connected/refreshed client stays in sync.
+    const hb = setInterval(() => {
+      if (lastStateRef.current) void ch.send({ type: "broadcast", event: "host_state", payload: lastStateRef.current });
+    }, 8000);
     return () => {
+      clearInterval(hb);
       void supabase.removeChannel(ch);
       channelRef.current = null;
     };
@@ -424,6 +449,8 @@ export function SessionFlow({
           features: scopeData.features,
           needs: scopeData.needs,
           level: scopeData.level,
+          workflows: scopeData.workflows,
+          notes: scopeData.notes,
         },
         title: "Scope & requirements",
       };
