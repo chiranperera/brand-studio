@@ -4,7 +4,8 @@ import { useEffect, useRef, useState } from "react";
 import { PALETTES, type PaletteRole } from "@/lib/color-palettes";
 
 export type Swatch = { hex: string; role: PaletteRole };
-type Pal = { name: string; mood: string; colors: Swatch[] };
+export type SavedPalette = { name: string; colors: Swatch[] };
+type Pal = { name: string; mood?: string; colors: Swatch[] };
 
 const keyOf = (colors: Swatch[]) => colors.map((c) => c.hex.toUpperCase()).join(",");
 
@@ -29,14 +30,22 @@ function PaletteCard({ p, active, onPick }: { p: Pal; active: boolean; onPick: (
 
 export function ColorPicker({
   colors,
+  paletteName,
+  saved,
   onChange,
+  onSelect,
+  onSaveAs,
   projectId,
   onComplete,
   onBack,
   busy,
 }: {
   colors: Swatch[];
+  paletteName: string;
+  saved: SavedPalette[];
   onChange: (colors: Swatch[]) => void;
+  onSelect: (name: string, colors: Swatch[]) => void;
+  onSaveAs: (name: string) => void;
   projectId: string;
   onComplete: () => void;
   onBack: () => void;
@@ -44,6 +53,8 @@ export function ColorPicker({
 }) {
   const [suggestions, setSuggestions] = useState<Pal[]>([]);
   const [suggesting, setSuggesting] = useState(false);
+  const [saveOpen, setSaveOpen] = useState(false);
+  const [nameInput, setNameInput] = useState("");
   const fetched = useRef(false);
 
   async function suggest() {
@@ -71,17 +82,24 @@ export function ColorPicker({
   }, []);
 
   const activeKey = keyOf(colors);
-  const setAt = (i: number, hex: string) =>
-    onChange(colors.map((c, idx) => (idx === i ? { ...c, hex } : c)));
+  const isSaved = saved.some((s) => keyOf(s.colors) === activeKey);
+  const setAt = (i: number, hex: string) => onChange(colors.map((c, idx) => (idx === i ? { ...c, hex } : c)));
   const removeAt = (i: number) => onChange(colors.filter((_, idx) => idx !== i));
   const addColor = () => onChange([...colors, { hex: "#888888", role: "accent" }]);
+
+  function doSave() {
+    const name = nameInput.trim() || `Custom palette ${saved.length + 1}`;
+    onSaveAs(name);
+    setSaveOpen(false);
+    setNameInput("");
+  }
 
   return (
     <div className="mx-auto max-w-3xl space-y-6">
       <div className="text-center">
         <div className="mono text-xs uppercase tracking-widest text-ink-3">Colour direction</div>
         <h1 className="mt-2 text-3xl font-semibold">Pick a palette — then make it yours</h1>
-        <p className="mt-1 text-sm text-ink-3">Start from a suggestion, then tweak any colour to taste.</p>
+        <p className="mt-1 text-sm text-ink-3">Start from a suggestion, tweak any colour, and save it as the brand palette.</p>
         <div className="mt-3">
           {suggesting ? (
             <span className="text-sm text-ink-3">✨ Suggesting palettes for this industry…</span>
@@ -93,12 +111,33 @@ export function ColorPicker({
         </div>
       </div>
 
+      {saved.length > 0 && (
+        <div>
+          <span className="label">Your saved palettes</span>
+          <div className="grid gap-3 sm:grid-cols-2">
+            {saved.map((p) => (
+              <PaletteCard
+                key={p.name}
+                p={{ name: p.name, mood: "Saved for this brand", colors: p.colors }}
+                active={keyOf(p.colors) === activeKey}
+                onPick={() => onSelect(p.name, p.colors)}
+              />
+            ))}
+          </div>
+        </div>
+      )}
+
       {suggestions.length > 0 && (
         <div>
           <span className="label">Suggested for this brand</span>
           <div className="grid gap-3 sm:grid-cols-2">
             {suggestions.map((p, i) => (
-              <PaletteCard key={`s${i}`} p={p} active={keyOf(p.colors) === activeKey} onPick={() => onChange(p.colors)} />
+              <PaletteCard
+                key={`s${i}`}
+                p={p}
+                active={keyOf(p.colors) === activeKey}
+                onPick={() => onSelect(p.name, p.colors)}
+              />
             ))}
           </div>
         </div>
@@ -108,14 +147,24 @@ export function ColorPicker({
         <span className="label">Or start from a preset</span>
         <div className="grid gap-3 sm:grid-cols-2">
           {PALETTES.map((p) => (
-            <PaletteCard key={p.id} p={p} active={keyOf(p.colors) === activeKey} onPick={() => onChange(p.colors)} />
+            <PaletteCard
+              key={p.id}
+              p={p}
+              active={keyOf(p.colors) === activeKey}
+              onPick={() => onSelect(p.name, p.colors)}
+            />
           ))}
         </div>
       </div>
 
       {colors.length > 0 && (
         <div className="card">
-          <span className="label">Edit your palette</span>
+          <div className="mb-2 flex items-center justify-between">
+            <span className="label mb-0">Edit your palette</span>
+            <span className="text-xs text-ink-3">
+              {paletteName ? `${paletteName}${isSaved ? "" : " · edited"}` : "Custom"}
+            </span>
+          </div>
           <div className="space-y-2">
             {colors.map((c, i) => (
               <div key={i} className="flex items-center gap-3">
@@ -138,9 +187,41 @@ export function ColorPicker({
               </div>
             ))}
           </div>
-          <button className="btn-ghost mt-3 text-xs" onClick={addColor}>
-            + Add colour
-          </button>
+          <div className="mt-3 flex items-center gap-2">
+            <button className="btn-ghost text-xs" onClick={addColor}>
+              + Add colour
+            </button>
+            {!saveOpen ? (
+              <button
+                className="btn-ghost text-xs"
+                onClick={() => {
+                  setNameInput(paletteName && !isSaved ? `${paletteName} (custom)` : "");
+                  setSaveOpen(true);
+                }}
+                disabled={isSaved}
+                title={isSaved ? "Already saved" : "Save these colours as a named palette"}
+              >
+                {isSaved ? "✓ Saved" : "💾 Save as palette"}
+              </button>
+            ) : (
+              <div className="flex flex-1 items-center gap-2">
+                <input
+                  className="input text-sm"
+                  placeholder="Palette name (e.g. Arcogen Brand)"
+                  value={nameInput}
+                  autoFocus
+                  onChange={(e) => setNameInput(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && doSave()}
+                />
+                <button className="btn-primary text-xs" onClick={doSave}>
+                  Save
+                </button>
+                <button className="btn-ghost text-xs" onClick={() => setSaveOpen(false)}>
+                  Cancel
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       )}
 

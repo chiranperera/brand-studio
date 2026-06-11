@@ -10,7 +10,7 @@ import { computeCompleteness, emptyBrandData, type BrandDataObject, type LogoTyp
 import { QuestionCard } from "./QuestionCard";
 import { LogoTypePicker } from "./LogoTypePicker";
 import { ScopePicker, type ScopeData } from "./ScopePicker";
-import { ColorPicker, type Swatch } from "./ColorPicker";
+import { ColorPicker, type Swatch, type SavedPalette } from "./ColorPicker";
 import { LivePanel } from "./LivePanel";
 import { ReferenceUpload } from "@/components/projects/ReferenceUpload";
 import {
@@ -90,6 +90,10 @@ export function SessionFlow({
   const [colorPalette, setColorPalette] = useState<Swatch[]>(
     (initialBrandData.color?.chosenPalette as Swatch[]) ?? []
   );
+  const [paletteName, setPaletteName] = useState<string>(initialBrandData.color?.paletteName ?? "");
+  const [savedPalettes, setSavedPalettes] = useState<SavedPalette[]>(
+    (initialBrandData.color?.savedPalettes as SavedPalette[]) ?? []
+  );
   const [surfaces, setSurfaces] = useState<Surface[]>(initialBrandData.surfaces ?? []);
   const [automation, setAutomation] = useState<Automation>(
     initialBrandData.automation ?? { needs: [], workflows: [] }
@@ -127,6 +131,8 @@ export function SessionFlow({
     surfaces: Surface[];
     automation: Automation;
     colorPalette: Swatch[];
+    paletteName: string;
+    savedPalettes: SavedPalette[];
   }
 
   /** Rebuild brand_data by replaying every persisted answer (order-independent, edit-safe). */
@@ -141,11 +147,13 @@ export function SessionFlow({
     b.logo = { ...b.logo, preferredTypes: extra.logoTypes }; // logo-type picker
     b.surfaces = extra.surfaces; // scope picker
     b.automation = extra.automation; // scope picker
+    b.color = { ...b.color, savedPalettes: extra.savedPalettes }; // designer's named palettes
     if (extra.colorPalette.length) {
-      // colour picker (editable)
+      // colour picker (editable + named)
       b.color = {
         ...b.color,
         chosenPalette: extra.colorPalette,
+        paletteName: extra.paletteName || undefined,
         locked: b.color.locked?.length
           ? b.color.locked
           : extra.colorPalette
@@ -158,7 +166,14 @@ export function SessionFlow({
     return b;
   }
 
-  const currentExtras = (): Extras => ({ logoTypes, surfaces, automation, colorPalette });
+  const currentExtras = (): Extras => ({
+    logoTypes,
+    surfaces,
+    automation,
+    colorPalette,
+    paletteName,
+    savedPalettes,
+  });
 
   /** Persist item `i` (insert or update), rebuild brand_data, return the updated items. */
   async function commit(i: number, its: Item[]): Promise<Item[]> {
@@ -266,6 +281,17 @@ export function SessionFlow({
     setBd(b);
     await persistBrand(b);
     setBusy(false);
+  }
+
+  /** Save the current edited colours as a named brand palette (and make it active). */
+  async function saveColorPalette(name: string) {
+    const entry: SavedPalette = { name, colors: colorPalette };
+    const next = [...savedPalettes.filter((s) => s.name !== name), entry];
+    setSavedPalettes(next);
+    setPaletteName(name);
+    const b = rebuild(items, refLen, { ...currentExtras(), savedPalettes: next, paletteName: name });
+    setBd(b);
+    await persistBrand(b);
   }
 
   /** Persist the logo-type selection into brand_data. */
@@ -679,7 +705,14 @@ export function SessionFlow({
         {topBar}
         <ColorPicker
           colors={colorPalette}
+          paletteName={paletteName}
+          saved={savedPalettes}
           onChange={setColorPalette}
+          onSelect={(name, cols) => {
+            setColorPalette(cols);
+            setPaletteName(name);
+          }}
+          onSaveAs={(name) => void saveColorPalette(name)}
           projectId={projectId}
           onComplete={async () => {
             if (colorPalette.length) await commitColor(colorPalette);

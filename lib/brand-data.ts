@@ -106,6 +106,8 @@ export interface BrandDataObject {
     locked: { hex: string; name?: string }[];
     direction?: string;
     chosenPalette: { hex: string; role: "primary" | "secondary" | "accent" | "neutral" }[];
+    paletteName?: string; // name of the active palette
+    savedPalettes?: { name: string; colors: { hex: string; role: "primary" | "secondary" | "accent" | "neutral" }[] }[];
     productColors?: { hex: string; name?: string }[];
     lightDark?: "light" | "dark" | "both";
   };
@@ -309,6 +311,15 @@ export const brandDataSchema = z.object({
     chosenPalette: z.array(
       z.object({ hex: z.string(), role: z.enum(["primary", "secondary", "accent", "neutral"]) })
     ),
+    paletteName: z.string().optional(),
+    savedPalettes: z
+      .array(
+        z.object({
+          name: z.string(),
+          colors: z.array(z.object({ hex: z.string(), role: z.enum(["primary", "secondary", "accent", "neutral"]) })),
+        })
+      )
+      .optional(),
     productColors: z.array(z.object({ hex: z.string(), name: z.string().optional() })).optional(),
     lightDark: z.enum(["light", "dark", "both"]).optional(),
   }),

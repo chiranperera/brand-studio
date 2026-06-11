@@ -75,7 +75,12 @@ export function deriveTokens(bd: BrandDataObject) {
     $schema: "https://design-tokens.org/tr/2025.10/format/",
     color: {
       brand: {
-        primary: color(primary, "Primary brand accent" + (bd.color.direction ? ` — ${bd.color.direction}` : "")),
+        primary: color(
+          primary,
+          `${bd.color.paletteName ? `${bd.color.paletteName} — ` : ""}Primary brand accent${
+            bd.color.direction ? ` (${bd.color.direction})` : ""
+          }`
+        ),
         secondary: color(secondary, "Secondary accent"),
       },
       neutral: neutralRamp(bd.color.lightDark),

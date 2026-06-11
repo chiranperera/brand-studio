@@ -104,7 +104,7 @@ Preferred types: ${list(bd.logo.preferredTypes)}. Avoid: ${list(bd.logo.avoid)}.
 ${bd.logo.notes || ""}
 
 ## Color direction
-Direction: ${bd.color.direction || "—"}. Locked: ${list(bd.color.locked.map((c) => c.hex))}.
+${bd.color.paletteName ? `Brand palette: **${bd.color.paletteName}** — ${list((bd.color.chosenPalette ?? []).map((c) => c.hex))}.\n` : ""}Direction: ${bd.color.direction || "—"}. Locked: ${list(bd.color.locked.map((c) => c.hex))}.
 Light/dark: ${bd.color.lightDark || "—"}. (Exact values live in tokens/brand.tokens.json.)
 
 ## Surfaces to design
