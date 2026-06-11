@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { emptyBrandData, withAssetReferences, type BrandDataObject } from "@/lib/brand-data";
+import { normalizeBrandData, withAssetReferences, type BrandDataObject } from "@/lib/brand-data";
 import type { InputType, Question } from "@/lib/question-engine";
 import { BANK } from "@/lib/question-bank";
 import { SessionFlow, type InitialAnswer } from "@/components/session/SessionFlow";
@@ -90,11 +90,8 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
     .eq("project_id", id)
     .order("created_at", { ascending: false });
 
-  const raw = (project.brand_data ?? {}) as BrandDataObject;
-  const bd = withAssetReferences(
-    Object.keys(raw).length ? raw : emptyBrandData({ id, client: project.client_name }),
-    assets
-  );
+  const raw = (project.brand_data ?? {}) as Partial<BrandDataObject>;
+  const bd = withAssetReferences(normalizeBrandData(raw, { id, client: project.client_name }), assets);
 
   return (
     <div>

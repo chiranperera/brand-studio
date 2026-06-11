@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { computeCompleteness, emptyBrandData, withAssetReferences, type BrandDataObject } from "@/lib/brand-data";
+import { computeCompleteness, normalizeBrandData, withAssetReferences, type BrandDataObject } from "@/lib/brand-data";
 import { ExportPanel } from "@/components/projects/ExportPanel";
 
 export const dynamic = "force-dynamic";
@@ -20,8 +20,8 @@ export default async function ExportPage({ params }: { params: Promise<{ id: str
   // Uploaded references live in `assets`; fold them in so completeness matches reality.
   const { data: assets } = await supabase.from("assets").select("kind, source, sentiment, note").eq("project_id", id);
 
-  const raw = (project.brand_data ?? {}) as BrandDataObject;
-  const bd = withAssetReferences(Object.keys(raw).length ? raw : emptyBrandData(), assets);
+  const raw = (project.brand_data ?? {}) as Partial<BrandDataObject>;
+  const bd = withAssetReferences(normalizeBrandData(raw), assets);
   const { score, missing } = computeCompleteness(bd);
 
   return (

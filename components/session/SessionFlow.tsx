@@ -80,7 +80,7 @@ export function SessionFlow({
   );
   const [pos, setPos] = useState(0);
   const [bd, setBd] = useState<BrandDataObject>(initialBrandData);
-  const [refLen, setRefLen] = useState(initialBrandData.references.length);
+  const [refLen, setRefLen] = useState(initialBrandData.references?.length ?? 0);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [phase, setPhase] = useState<Phase>("questions");

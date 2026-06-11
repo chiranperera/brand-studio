@@ -10,7 +10,7 @@ import {
 import {
   brandDataSchema,
   computeCompleteness,
-  emptyBrandData,
+  normalizeBrandData,
   withAssetReferences,
   type BrandDataObject,
 } from "@/lib/brand-data";
@@ -49,8 +49,8 @@ export async function POST(req: Request) {
     .select("kind, source, storage_path, sentiment, note, extracted")
     .eq("project_id", projectId);
 
-  const raw = (project.brand_data ?? {}) as BrandDataObject;
-  const bd = withAssetReferences(Object.keys(raw).length ? raw : emptyBrandData(), assets);
+  const raw = (project.brand_data ?? {}) as Partial<BrandDataObject>;
+  const bd = withAssetReferences(normalizeBrandData(raw), assets);
 
   // Gate on completeness unless the host overrides.
   const { missing } = computeCompleteness(bd);

@@ -200,6 +200,42 @@ export function emptyBrandData(seed?: Partial<BrandDataObject["project"]>): Bran
   };
 }
 
+/**
+ * Merge a (possibly old/partial) stored brand_data onto the full default shape,
+ * so every key exists. Prevents "cannot read X of undefined" crashes when older
+ * projects are read by newer code.
+ */
+export function normalizeBrandData(
+  raw: Partial<BrandDataObject> | null | undefined,
+  seed?: Partial<BrandDataObject["project"]>
+): BrandDataObject {
+  const base = emptyBrandData(seed);
+  if (!raw || typeof raw !== "object") return base;
+  const r = raw as Partial<BrandDataObject>;
+  return {
+    ...base,
+    ...r,
+    project: { ...base.project, ...r.project },
+    business: { ...base.business, ...r.business },
+    audience: { ...base.audience, ...r.audience },
+    goals: { ...base.goals, ...r.goals },
+    market: { ...base.market, ...r.market },
+    brand: { ...base.brand, ...r.brand },
+    voice: { ...base.voice, ...r.voice },
+    logo: { ...base.logo, ...r.logo },
+    color: { ...base.color, ...r.color },
+    type: { ...base.type, ...r.type },
+    visualStyle: { ...base.visualStyle, ...r.visualStyle },
+    imagery: { ...base.imagery, ...r.imagery },
+    automation: { ...base.automation, ...r.automation },
+    constraints: { ...base.constraints, ...r.constraints },
+    context: { ...base.context, ...r.context },
+    meta: { ...base.meta, ...r.meta },
+    surfaces: r.surfaces ?? base.surfaces,
+    references: r.references ?? base.references,
+  };
+}
+
 /* ----------------------------- zod schema ----------------------------- */
 
 const offering = z.object({ name: z.string(), priority: z.enum(["core", "secondary"]) });
@@ -341,18 +377,18 @@ export const brandDataSchema = z.object({
 // drives when the AI session is allowed to finish). Covers every key brand &
 // design category, so 100% means a genuinely complete brief.
 const REQUIRED: { label: string; ok: (b: BrandDataObject) => boolean }[] = [
-  { label: "Business type", ok: (b) => !!b.business.type },
-  { label: "What the business does", ok: (b) => !!b.business.description?.trim() },
-  { label: "Products / services", ok: (b) => b.business.offerings.length > 0 },
-  { label: "Target audience", ok: (b) => b.audience.segments.length > 0 },
-  { label: "Primary goal", ok: (b) => !!b.goals.primary?.trim() },
-  { label: "Brand personality", ok: (b) => !!b.brand.archetype || b.brand.personality.length > 0 },
-  { label: "Voice", ok: (b) => !!b.voice.person },
-  { label: "Logo type", ok: (b) => b.logo.preferredTypes.length > 0 },
-  { label: "Colour direction", ok: (b) => !!b.color.direction || b.color.locked.length > 0 },
-  { label: "Typography feel", ok: (b) => !!b.type.displayFeel },
-  { label: "Visual style", ok: (b) => !!b.visualStyle.cluster },
-  { label: "Imagery style", ok: (b) => b.imagery.mode.length > 0 },
+  { label: "Business type", ok: (b) => !!b.business?.type },
+  { label: "What the business does", ok: (b) => !!b.business?.description?.trim() },
+  { label: "Products / services", ok: (b) => (b.business?.offerings?.length ?? 0) > 0 },
+  { label: "Target audience", ok: (b) => (b.audience?.segments?.length ?? 0) > 0 },
+  { label: "Primary goal", ok: (b) => !!b.goals?.primary?.trim() },
+  { label: "Brand personality", ok: (b) => !!b.brand?.archetype || (b.brand?.personality?.length ?? 0) > 0 },
+  { label: "Voice", ok: (b) => !!b.voice?.person },
+  { label: "Logo type", ok: (b) => (b.logo?.preferredTypes?.length ?? 0) > 0 },
+  { label: "Colour direction", ok: (b) => !!b.color?.direction || (b.color?.locked?.length ?? 0) > 0 },
+  { label: "Typography feel", ok: (b) => !!b.type?.displayFeel },
+  { label: "Visual style", ok: (b) => !!b.visualStyle?.cluster },
+  { label: "Imagery style", ok: (b) => (b.imagery?.mode?.length ?? 0) > 0 },
   { label: "What to build (sections)", ok: (b) => (b.surfaces?.length ?? 0) > 0 },
   { label: "AI automation scope", ok: (b) => (b.automation?.needs?.length ?? 0) > 0 },
   // Reference images are intentionally NOT required: in a live discovery session

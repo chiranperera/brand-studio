@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { generateBrief, generateDeliverables } from "@/lib/export/generate";
-import { emptyBrandData, type BrandDataObject } from "@/lib/brand-data";
+import { normalizeBrandData, type BrandDataObject } from "@/lib/brand-data";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -22,8 +22,7 @@ export async function POST(req: Request) {
     .single();
   if (error || !project) return NextResponse.json({ error: "Project not found" }, { status: 404 });
 
-  const bd = (project.brand_data ?? {}) as BrandDataObject;
-  const merged = Object.keys(bd).length ? bd : emptyBrandData();
+  const merged = normalizeBrandData(project.brand_data as Partial<BrandDataObject>);
 
   const [brief, deliverables] = await Promise.all([generateBrief(merged), generateDeliverables(merged)]);
   return NextResponse.json({ brief, deliverables });
