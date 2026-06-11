@@ -113,6 +113,14 @@ export interface BrandDataObject {
 
   surfaces: { kind: string; screens: string[]; components: string[] }[];
 
+  // Phase 2.5 — what the site/app/tool must do + the AI automation scope.
+  automation: {
+    needs: string[]; // chatbot, booking, lead capture…
+    level?: string; // assistive | workflow | autonomous
+    workflows: string[]; // repetitive tasks to automate
+    notes?: string;
+  };
+
   product?: {
     skus?: string;
     formats?: string;
@@ -168,6 +176,7 @@ export function emptyBrandData(seed?: Partial<BrandDataObject["project"]>): Bran
     visualStyle: { moodWords: [] },
     imagery: { mode: [] },
     surfaces: [],
+    automation: { needs: [], workflows: [] },
     references: [],
     constraints: {},
     meta: { completeness: 0, requiredMissing: [] },
@@ -252,6 +261,12 @@ export const brandDataSchema = z.object({
   surfaces: z.array(
     z.object({ kind: z.string(), screens: z.array(z.string()), components: z.array(z.string()) })
   ),
+  automation: z.object({
+    needs: z.array(z.string()),
+    level: z.string().optional(),
+    workflows: z.array(z.string()),
+    notes: z.string().optional(),
+  }),
   product: z
     .object({
       skus: z.string().optional(),
@@ -307,7 +322,8 @@ const REQUIRED: { label: string; ok: (b: BrandDataObject) => boolean }[] = [
   { label: "Typography feel", ok: (b) => !!b.type.displayFeel },
   { label: "Visual style", ok: (b) => !!b.visualStyle.cluster },
   { label: "Imagery style", ok: (b) => b.imagery.mode.length > 0 },
-  { label: "Surfaces to design", ok: (b) => b.surfaces.length > 0 },
+  { label: "What to build (sections)", ok: (b) => (b.surfaces?.length ?? 0) > 0 },
+  { label: "AI automation scope", ok: (b) => (b.automation?.needs?.length ?? 0) > 0 },
   // Reference images are intentionally NOT required: in a live discovery session
   // the designer gathers inspiration/competitor/logo files afterwards. The
   // session reaches 100% on the answers alone; references can be added later and

@@ -10,10 +10,13 @@ import { computeCompleteness, emptyBrandData, type BrandDataObject, type LogoTyp
 import { QuestionCard } from "./QuestionCard";
 import { ProgressRail } from "./ProgressRail";
 import { LogoTypePicker } from "./LogoTypePicker";
+import { ScopePicker, type ScopeData } from "./ScopePicker";
 import { ReferenceUpload } from "@/components/projects/ReferenceUpload";
 import type { AnswerVal } from "./InputArea";
 
-type Phase = "questions" | "logo" | "done";
+type Phase = "questions" | "scope" | "logo" | "done";
+type Surface = { kind: string; screens: string[]; components: string[] };
+type Automation = BrandDataObject["automation"];
 
 /** One step in the session. `id` is present once the answer is persisted. */
 interface Item {
@@ -67,6 +70,10 @@ export function SessionFlow({
   const [error, setError] = useState<string | null>(null);
   const [phase, setPhase] = useState<Phase>("questions");
   const [logoTypes, setLogoTypes] = useState<LogoType[]>(initialBrandData.logo?.preferredTypes ?? []);
+  const [surfaces, setSurfaces] = useState<Surface[]>(initialBrandData.surfaces ?? []);
+  const [automation, setAutomation] = useState<Automation>(
+    initialBrandData.automation ?? { needs: [], workflows: [] }
+  );
   const [showRefs, setShowRefs] = useState(false);
   const [dirty, setDirty] = useState(false);
   const started = useRef(false);
@@ -74,8 +81,15 @@ export function SessionFlow({
   const { score, missing } = computeCompleteness(bd);
   const refCount = refLen;
 
+  /** Picker-captured fields that live outside the answer log. */
+  interface Extras {
+    logoTypes: LogoType[];
+    surfaces: Surface[];
+    automation: Automation;
+  }
+
   /** Rebuild brand_data by replaying every persisted answer (order-independent, edit-safe). */
-  function rebuild(its: Item[], refs: number, logos: LogoType[]): BrandDataObject {
+  function rebuild(its: Item[], refs: number, extra: Extras): BrandDataObject {
     let b = emptyBrandData();
     b.project = { ...bd.project }; // keep client/contact/email/industry
     for (const it of its) {
@@ -83,11 +97,15 @@ export function SessionFlow({
       if (it.question.field && !isEmpty(it.value)) b = writeField(b, it.question.field, it.value as AnswerValue);
     }
     b.references = Array.from({ length: refs }, () => ({ type: "upload" }));
-    b.logo = { ...b.logo, preferredTypes: logos }; // captured by the logo-type picker
+    b.logo = { ...b.logo, preferredTypes: extra.logoTypes }; // logo-type picker
+    b.surfaces = extra.surfaces; // scope picker
+    b.automation = extra.automation; // scope picker
     const c = computeCompleteness(b);
     b.meta = { ...b.meta, completeness: c.score, requiredMissing: c.missing };
     return b;
   }
+
+  const currentExtras = (): Extras => ({ logoTypes, surfaces, automation });
 
   /** Persist item `i` (insert or update), rebuild brand_data, return the updated items. */
   async function commit(i: number, its: Item[]): Promise<Item[]> {
@@ -117,7 +135,7 @@ export function SessionFlow({
     }
     const next = its.map((x, idx) => (idx === i ? { ...it, id } : x));
     setItems(next);
-    const b = rebuild(next, refLen, logoTypes);
+    const b = rebuild(next, refLen, currentExtras());
     setBd(b);
     await supabase
       .from("projects")
@@ -130,17 +148,15 @@ export function SessionFlow({
     return next;
   }
 
-  /** Questions are done → go to the logo-type picker (or straight to done if a
-   *  logo type was already chosen, e.g. on resume). */
+  const scopeDone = surfaces.length > 0 && automation.needs.length > 0;
+  const logoDone = logoTypes.length > 0;
+
+  /** Questions are done → advance to the first unfinished space (scope → logo → done). */
   function finishQuestions() {
-    setPhase(logoTypes.length ? "done" : "logo");
+    setPhase(!scopeDone ? "scope" : !logoDone ? "logo" : "done");
   }
 
-  /** Persist the logo-type selection into brand_data. */
-  async function commitLogo(types: LogoType[]) {
-    setBusy(true);
-    const b = rebuild(items, refLen, types);
-    setBd(b);
+  async function persistBrand(b: BrandDataObject) {
     const supabase = createClient();
     await supabase
       .from("projects")
@@ -150,6 +166,32 @@ export function SessionFlow({
         status: b.meta.requiredMissing.length === 0 ? "ready" : "discovery",
       })
       .eq("id", projectId);
+  }
+
+  /** Persist the scope (surfaces + AI automation) into brand_data. */
+  async function commitScope(d: ScopeData) {
+    setBusy(true);
+    const nextSurfaces: Surface[] = d.kinds.map((kind) => ({ kind, screens: d.sections, components: d.features }));
+    const nextAutomation: Automation = {
+      needs: d.needs,
+      level: d.level || undefined,
+      workflows: d.workflows.split("\n").map((w) => w.trim()).filter(Boolean),
+      notes: d.notes || undefined,
+    };
+    setSurfaces(nextSurfaces);
+    setAutomation(nextAutomation);
+    const b = rebuild(items, refLen, { logoTypes, surfaces: nextSurfaces, automation: nextAutomation });
+    setBd(b);
+    await persistBrand(b);
+    setBusy(false);
+  }
+
+  /** Persist the logo-type selection into brand_data. */
+  async function commitLogo(types: LogoType[]) {
+    setBusy(true);
+    const b = rebuild(items, refLen, { logoTypes: types, surfaces, automation });
+    setBd(b);
+    await persistBrand(b);
     setBusy(false);
   }
 
@@ -276,7 +318,34 @@ export function SessionFlow({
     </div>
   );
 
-  // Second space: the visual logo-type picker (after the questions).
+  // Space 2.5: scope & build requirements (sections + AI automation).
+  if (phase === "scope") {
+    const scopeInitial: ScopeData = {
+      kinds: surfaces.map((s) => s.kind),
+      sections: Array.from(new Set(surfaces.flatMap((s) => s.screens))),
+      features: Array.from(new Set(surfaces.flatMap((s) => s.components))),
+      needs: automation.needs,
+      level: automation.level ?? "",
+      workflows: (automation.workflows ?? []).join("\n"),
+      notes: automation.notes ?? "",
+    };
+    return (
+      <ScopePicker
+        initial={scopeInitial}
+        onComplete={async (d) => {
+          await commitScope(d);
+          setPhase(logoDone ? "done" : "logo");
+        }}
+        onBack={() => {
+          setPhase("questions");
+          if (items.length) setPos(items.length - 1);
+        }}
+        busy={busy}
+      />
+    );
+  }
+
+  // Space 3: the visual logo-type picker.
   if (phase === "logo") {
     return (
       <LogoTypePicker
@@ -286,10 +355,7 @@ export function SessionFlow({
           await commitLogo(logoTypes);
           setPhase("done");
         }}
-        onBack={() => {
-          setPhase("questions");
-          if (items.length) setPos(items.length - 1);
-        }}
+        onBack={() => setPhase("scope")}
         busy={busy}
       />
     );
@@ -333,6 +399,9 @@ export function SessionFlow({
                   }}
                 >
                   Back to questions
+                </button>
+                <button className="btn-ghost" onClick={() => setPhase("scope")}>
+                  Scope
                 </button>
                 <button className="btn-ghost" onClick={() => setPhase("logo")}>
                   Logo types
@@ -384,10 +453,10 @@ export function SessionFlow({
                   // Drop a trailing unanswered "current" placeholder so the
                   // saved question count stays stable.
                   setItems((prev) => (prev.length && !prev[prev.length - 1].id ? prev.slice(0, -1) : prev));
-                  setPhase("logo");
+                  setPhase("scope");
                 }}
               >
-                Finish questions → logo
+                Finish questions → scope
               </button>
             </div>
           )}

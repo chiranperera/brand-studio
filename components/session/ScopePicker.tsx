@@ -1,0 +1,149 @@
+"use client";
+
+import { useState } from "react";
+import {
+  SURFACE_KINDS,
+  WEBSITE_SECTIONS,
+  WEBSITE_FEATURES,
+  AUTOMATION_NEEDS,
+  AUTOMATION_LEVELS,
+} from "@/lib/scope-options";
+
+export interface ScopeData {
+  kinds: string[];
+  sections: string[];
+  features: string[];
+  needs: string[];
+  level: string;
+  workflows: string;
+  notes: string;
+}
+
+function ChipGroup({
+  options,
+  selected,
+  onToggle,
+}: {
+  options: string[];
+  selected: string[];
+  onToggle: (o: string) => void;
+}) {
+  return (
+    <div className="flex flex-wrap gap-2">
+      {options.map((o) => (
+        <button
+          key={o}
+          type="button"
+          className={`chip ${selected.includes(o) ? "chip-on" : ""}`}
+          onClick={() => onToggle(o)}
+        >
+          {o}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+export function ScopePicker({
+  initial,
+  onComplete,
+  onBack,
+  busy,
+}: {
+  initial: ScopeData;
+  onComplete: (d: ScopeData) => void;
+  onBack: () => void;
+  busy: boolean;
+}) {
+  const [d, setD] = useState<ScopeData>(initial);
+  const toggle = (key: "kinds" | "sections" | "features" | "needs") => (o: string) =>
+    setD((s) => ({ ...s, [key]: s[key].includes(o) ? s[key].filter((x) => x !== o) : [...s[key], o] }));
+
+  const canContinue = d.kinds.length > 0 && d.needs.length > 0;
+
+  return (
+    <div className="mx-auto max-w-3xl space-y-6">
+      <div className="text-center">
+        <div className="mono text-xs uppercase tracking-widest text-ink-3">Scope &amp; build requirements</div>
+        <h1 className="mt-2 text-3xl font-semibold">What are we building?</h1>
+        <p className="mt-1 text-sm text-ink-3">
+          The functional brief — the pages, features and AI automation to build. This is what Claude Design &amp; Claude
+          Code work from.
+        </p>
+      </div>
+
+      <div className="card space-y-4">
+        <div>
+          <span className="label">What are we building? (pick all that apply)</span>
+          <ChipGroup options={SURFACE_KINDS} selected={d.kinds} onToggle={toggle("kinds")} />
+        </div>
+        <div>
+          <span className="label">Which sections / pages?</span>
+          <ChipGroup options={WEBSITE_SECTIONS} selected={d.sections} onToggle={toggle("sections")} />
+        </div>
+        <div>
+          <span className="label">Features &amp; functionality</span>
+          <ChipGroup options={WEBSITE_FEATURES} selected={d.features} onToggle={toggle("features")} />
+        </div>
+      </div>
+
+      <div className="card space-y-4">
+        <div>
+          <h2 className="font-medium">AI automation</h2>
+          <p className="text-sm text-ink-3">Where should AI take work off their plate? Automate these jobs first.</p>
+        </div>
+        <div>
+          <span className="label">What should the automation do? (pick all that apply)</span>
+          <ChipGroup options={AUTOMATION_NEEDS} selected={d.needs} onToggle={toggle("needs")} />
+        </div>
+        <div>
+          <span className="label">How much automation?</span>
+          <div className="space-y-2">
+            {AUTOMATION_LEVELS.map((l) => (
+              <button
+                key={l}
+                type="button"
+                onClick={() => setD((s) => ({ ...s, level: l }))}
+                className={`block w-full rounded-lg border px-3 py-2 text-left text-sm transition-colors ${
+                  d.level === l ? "border-accent bg-accent/10 text-ink" : "border-line text-ink-2 hover:border-ink-3"
+                }`}
+              >
+                {l}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div>
+          <span className="label">Biggest time-sinks to automate (one per line)</span>
+          <textarea
+            className="input min-h-20"
+            placeholder="e.g. answering the same booking questions all day&#10;chasing quotes and follow-ups"
+            value={d.workflows}
+            onChange={(e) => setD((s) => ({ ...s, workflows: e.target.value }))}
+          />
+        </div>
+        <div>
+          <span className="label">Anything else about scope?</span>
+          <input
+            className="input"
+            value={d.notes}
+            onChange={(e) => setD((s) => ({ ...s, notes: e.target.value }))}
+            placeholder="Optional"
+          />
+        </div>
+      </div>
+
+      <div className="flex items-center justify-between">
+        <button className="btn-ghost" onClick={onBack} disabled={busy}>
+          ← Back to questions
+        </button>
+        <span className="text-sm text-ink-3">
+          {canContinue ? `${d.kinds.length} surface(s) · ${d.needs.length} automation(s)` : "Pick what to build + ≥1 automation"}
+        </span>
+        <button className="btn-primary" onClick={() => onComplete(d)} disabled={busy || !canContinue}>
+          {busy ? "Saving…" : "Save & continue →"}
+        </button>
+      </div>
+    </div>
+  );
+}

@@ -178,6 +178,31 @@ Use content/website-copy.md for real copy when available.
     });
   }
 
+  if (bd.automation?.needs?.length) {
+    out.push({
+      name: "automation.md",
+      content: `# AI Automation
+
+## Goal
+Build the AI automation that takes repetitive work off the client's plate.
+
+## Automations to build
+${bd.automation.needs.map((n) => `- ${n}`).join("\n")}
+
+## Level
+${bd.automation.level || "—"}
+
+## Workflows to smooth (their words)
+${bd.automation.workflows.length ? bd.automation.workflows.map((w) => `- ${w}`).join("\n") : "—"}
+
+${bd.automation.notes ? `## Notes\n${bd.automation.notes}` : ""}
+
+## Acceptance
+Each automation has a clear trigger, the action it performs, and where a human stays in the loop.
+`,
+    });
+  }
+
   if (bd.surfaces.some((s) => /social/i.test(s.kind))) {
     out.push({
       name: "social.md",

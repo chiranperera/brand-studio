@@ -41,7 +41,6 @@ export const ASK_POOL: string[] = [
   "visualStyle.moodWords",
   "imagery.mode",
   "imagery.iconStyle",
-  "surfaces",
   "constraints.stack",
   "constraints.accessibility",
 ];
@@ -68,7 +67,8 @@ export const REQUIRED_GROUPS: string[][] = [
   ["type.displayFeel"],
   ["visualStyle.cluster"],
   ["imagery.mode"],
-  ["surfaces"],
+  // surfaces + AI automation are captured by the Scope step (see ScopePicker),
+  // so they're not asked as text questions here.
 ];
 
 /** Required groups not yet asked (none of their fields appear in `asked`). */
