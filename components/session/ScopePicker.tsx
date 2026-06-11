@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   SURFACE_KINDS,
   WEBSITE_SECTIONS,
@@ -46,18 +46,60 @@ function ChipGroup({
 
 export function ScopePicker({
   initial,
+  projectId,
   onComplete,
   onBack,
   busy,
 }: {
   initial: ScopeData;
+  projectId: string;
   onComplete: (d: ScopeData) => void;
   onBack: () => void;
   busy: boolean;
 }) {
   const [d, setD] = useState<ScopeData>(initial);
+  const [suggesting, setSuggesting] = useState(false);
+  const [suggested, setSuggested] = useState(false);
+  const fetched = useRef(false);
   const toggle = (key: "kinds" | "sections" | "features" | "needs") => (o: string) =>
     setD((s) => ({ ...s, [key]: s[key].includes(o) ? s[key].filter((x) => x !== o) : [...s[key], o] }));
+
+  async function suggest() {
+    setSuggesting(true);
+    try {
+      const res = await fetch("/api/scope-suggest", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ projectId }),
+      });
+      const s = await res.json();
+      if (res.ok) {
+        // Pre-select suggestions; keep any free-text the host already wrote.
+        setD((prev) => ({
+          ...prev,
+          kinds: s.kinds ?? prev.kinds,
+          sections: s.sections ?? prev.sections,
+          features: s.features ?? prev.features,
+          needs: s.needs ?? prev.needs,
+          level: s.level ?? prev.level,
+        }));
+        setSuggested(true);
+      }
+    } catch {
+      /* leave as-is on failure */
+    } finally {
+      setSuggesting(false);
+    }
+  }
+
+  // Auto-suggest on first entry when nothing is selected yet (smart defaults).
+  useEffect(() => {
+    if (fetched.current) return;
+    fetched.current = true;
+    const empty = !initial.kinds.length && !initial.sections.length && !initial.features.length && !initial.needs.length;
+    if (empty) void suggest();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const canContinue = d.kinds.length > 0 && d.needs.length > 0;
 
@@ -70,6 +112,18 @@ export function ScopePicker({
           The functional brief — the pages, features and AI automation to build. This is what Claude Design &amp; Claude
           Code work from.
         </p>
+        <div className="mt-3 flex items-center justify-center gap-3">
+          {suggesting ? (
+            <span className="text-sm text-ink-3">✨ Suggesting smart defaults for this industry…</span>
+          ) : (
+            <>
+              {suggested && <span className="text-sm text-accent">✨ Pre-filled for this industry — adjust as needed</span>}
+              <button className="btn-ghost" onClick={() => void suggest()} disabled={busy}>
+                ↻ {suggested ? "Re-suggest" : "Suggest from industry"}
+              </button>
+            </>
+          )}
+        </div>
       </div>
 
       <div className="card space-y-4">

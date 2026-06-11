@@ -332,6 +332,7 @@ export function SessionFlow({
     return (
       <ScopePicker
         initial={scopeInitial}
+        projectId={projectId}
         onComplete={async (d) => {
           await commitScope(d);
           setPhase(logoDone ? "done" : "logo");
