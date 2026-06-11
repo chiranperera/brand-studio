@@ -15,14 +15,23 @@ export function LiveClient({ code }: { code: string }) {
   const [value, setValue] = useState<LiveValue>("");
   const [other, setOther] = useState("");
   const channelRef = useRef<RealtimeChannel | null>(null);
+  const autoJoined = useRef(false);
+  const storeKey = `ds-live-${code}`;
 
   // Keep local value in sync with what the host shows.
   useEffect(() => {
     if (state?.kind === "question") setValue(state.value ?? "");
   }, [state?.value, state?.kind, state?.question?.field]);
 
-  function join() {
-    if (!name.trim()) return;
+  function join(n?: string) {
+    const nm = (n ?? name).trim();
+    if (!nm) return;
+    try {
+      localStorage.setItem(storeKey, nm); // remember so a refresh auto-rejoins
+    } catch {
+      /* ignore */
+    }
+    setName(nm);
     const supabase = createClient();
     const ch = supabase.channel(liveChannel(code), { config: { presence: { key: `client-${Math.floor(Date.now() % 1e6)}` } } });
     channelRef.current = ch;
@@ -30,11 +39,32 @@ export function LiveClient({ code }: { code: string }) {
     ch.subscribe((status) => {
       if (status === "SUBSCRIBED") {
         setConnected(true);
-        void ch.track({ role: "client", name: name.trim() });
+        void ch.track({ role: "client", name: nm });
+        // Ask the host to (re)send the current step — catches us up on join + reconnect.
+        void ch.send({ type: "broadcast", event: "request_state", payload: {} });
+      } else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") {
+        setConnected(false);
       }
     });
     setJoined(true);
   }
+
+  // Auto-rejoin on refresh if we joined before (a refresh must not kill the session).
+  useEffect(() => {
+    if (autoJoined.current) return;
+    autoJoined.current = true;
+    let saved: string | null = null;
+    try {
+      saved = localStorage.getItem(storeKey);
+    } catch {
+      /* ignore */
+    }
+    if (saved) {
+      setName(saved);
+      join(saved);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   function send(v: LiveValue) {
     setValue(v);
@@ -61,7 +91,7 @@ export function LiveClient({ code }: { code: string }) {
             onChange={(e) => setName(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && join()}
           />
-          <button className="btn-primary mt-3 w-full" onClick={join} disabled={!name.trim()}>
+          <button className="btn-primary mt-3 w-full" onClick={() => join()} disabled={!name.trim()}>
             Join
           </button>
         </div>
@@ -111,8 +141,15 @@ function ClientQuestion({
   onChange: (v: LiveValue) => void;
 }) {
   const q = state.question!;
-  const opts = q.options ?? [];
+  const base = q.options ?? [];
   const arr = Array.isArray(value) ? value : [];
+  // Show options PLUS any already-selected values (some questions don't carry
+  // their option list), so the client always sees the choices, not just "Add".
+  const opts = [
+    ...base,
+    ...arr.filter((v) => !base.includes(v)),
+    ...(typeof value === "string" && value && !base.includes(value) ? [value] : []),
+  ];
 
   return (
     <div className="card">
@@ -205,7 +242,9 @@ function ClientLogo({ logo, onSelect }: { logo: NonNullable<HostState["logo"]>; 
         <p className="mono text-xs text-ink-3">{info.name}</p>
       </div>
       <p className="mt-3 text-sm text-ink-2">{info.summary}</p>
-      <div className="mt-4 grid grid-cols-3 gap-2">
+
+      <span className="label mt-4">Example logos</span>
+      <div className="grid grid-cols-3 gap-2">
         {info.examples.map((e) => (
           <div key={e.brand} className="flex aspect-[4/3] items-center justify-center overflow-hidden rounded-lg border border-line bg-white">
             {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -213,6 +252,17 @@ function ClientLogo({ logo, onSelect }: { logo: NonNullable<HostState["logo"]>; 
           </div>
         ))}
       </div>
+
+      <span className="label mt-3">In real use</span>
+      <div className="grid grid-cols-3 gap-2">
+        {info.examples.map((e) => (
+          <div key={`${e.brand}-m`} className="aspect-[4/3] overflow-hidden rounded-lg border border-line bg-panel2">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={e.mockup} alt={`${e.brand} in use`} className="h-full w-full object-cover" />
+          </div>
+        ))}
+      </div>
+
       <button
         onClick={() => onSelect(info.slug)}
         className={`mt-4 w-full rounded-lg border px-4 py-3 text-sm font-medium ${

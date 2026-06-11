@@ -110,6 +110,7 @@ export function SessionFlow({
   const channelRef = useRef<RealtimeChannel | null>(null);
   const lastActor = useRef<Actor>("host");
   const posRef = useRef(0);
+  const lastStateRef = useRef<HostState | null>(null); // latest broadcast, for replay to (re)joining clients
 
   const { score, missing } = computeCompleteness(bd);
   const refCount = refLen;
@@ -352,6 +353,10 @@ export function SessionFlow({
       const p = payload as ClientScope;
       handleClientScope(p.key, p.value);
     });
+    // A (re)joining client asks for the current step — replay it.
+    ch.on("broadcast", { event: "request_state" }, () => {
+      if (lastStateRef.current) void ch.send({ type: "broadcast", event: "host_state", payload: lastStateRef.current });
+    });
     ch.on("presence", { event: "sync" }, () => {
       const st = ch.presenceState() as Record<string, { role?: string; name?: string }[]>;
       let name: string | null = null;
@@ -361,6 +366,10 @@ export function SessionFlow({
           if (p.role === "client") name = p.name || "Client";
         });
       setClientName(name);
+      // Make sure a newly-connected client immediately gets the current step.
+      if (name && lastStateRef.current) {
+        void ch.send({ type: "broadcast", event: "host_state", payload: lastStateRef.current });
+      }
     });
     ch.subscribe((status) => {
       if (status === "SUBSCRIBED") void ch.track({ role: "host" });
@@ -411,6 +420,7 @@ export function SessionFlow({
     } else {
       state = { kind: "done", title: "Session complete" };
     }
+    lastStateRef.current = state;
     void ch.send({ type: "broadcast", event: "host_state", payload: state });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [live, phase, pos, items, clientPicks, logoPage, logoTypes, scopeData]);
