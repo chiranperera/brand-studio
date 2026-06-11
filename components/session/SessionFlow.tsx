@@ -10,9 +10,8 @@ import { computeCompleteness, emptyBrandData, type BrandDataObject, type LogoTyp
 import { QuestionCard } from "./QuestionCard";
 import { LogoTypePicker } from "./LogoTypePicker";
 import { ScopePicker, type ScopeData } from "./ScopePicker";
-import { ColorPicker } from "./ColorPicker";
+import { ColorPicker, type Swatch } from "./ColorPicker";
 import { LivePanel } from "./LivePanel";
-import { paletteById, matchPalette } from "@/lib/color-palettes";
 import { ReferenceUpload } from "@/components/projects/ReferenceUpload";
 import {
   liveChannel,
@@ -88,8 +87,8 @@ export function SessionFlow({
   const [phase, setPhase] = useState<Phase>("questions");
   const [logoTypes, setLogoTypes] = useState<LogoType[]>(initialBrandData.logo?.preferredTypes ?? []);
   const [logoPage, setLogoPage] = useState(0);
-  const [colorPaletteId, setColorPaletteId] = useState<string | null>(
-    matchPalette(initialBrandData.color?.chosenPalette)
+  const [colorPalette, setColorPalette] = useState<Swatch[]>(
+    (initialBrandData.color?.chosenPalette as Swatch[]) ?? []
   );
   const [surfaces, setSurfaces] = useState<Surface[]>(initialBrandData.surfaces ?? []);
   const [automation, setAutomation] = useState<Automation>(
@@ -127,7 +126,7 @@ export function SessionFlow({
     logoTypes: LogoType[];
     surfaces: Surface[];
     automation: Automation;
-    colorPaletteId: string | null;
+    colorPalette: Swatch[];
   }
 
   /** Rebuild brand_data by replaying every persisted answer (order-independent, edit-safe). */
@@ -142,14 +141,16 @@ export function SessionFlow({
     b.logo = { ...b.logo, preferredTypes: extra.logoTypes }; // logo-type picker
     b.surfaces = extra.surfaces; // scope picker
     b.automation = extra.automation; // scope picker
-    const pal = paletteById(extra.colorPaletteId); // colour picker
-    if (pal) {
+    if (extra.colorPalette.length) {
+      // colour picker (editable)
       b.color = {
         ...b.color,
-        chosenPalette: pal.colors,
+        chosenPalette: extra.colorPalette,
         locked: b.color.locked?.length
           ? b.color.locked
-          : pal.colors.filter((c) => c.role === "primary" || c.role === "secondary").map((c) => ({ hex: c.hex })),
+          : extra.colorPalette
+              .filter((c) => c.role === "primary" || c.role === "secondary")
+              .map((c) => ({ hex: c.hex })),
       };
     }
     const c = computeCompleteness(b);
@@ -157,7 +158,7 @@ export function SessionFlow({
     return b;
   }
 
-  const currentExtras = (): Extras => ({ logoTypes, surfaces, automation, colorPaletteId });
+  const currentExtras = (): Extras => ({ logoTypes, surfaces, automation, colorPalette });
 
   /** Persist item `i` (insert or update), rebuild brand_data, return the updated items. */
   async function commit(i: number, its: Item[]): Promise<Item[]> {
@@ -211,7 +212,7 @@ export function SessionFlow({
   }
 
   const scopeDone = surfaces.length > 0 && automation.needs.length > 0;
-  const colorDone = !!colorPaletteId;
+  const colorDone = colorPalette.length > 0;
   const logoDone = logoTypes.length > 0;
 
   /** Next unfinished space, in order: scope → colour → logo → done. */
@@ -257,11 +258,11 @@ export function SessionFlow({
     setBusy(false);
   }
 
-  /** Persist the chosen colour palette into brand_data. */
-  async function commitColor(id: string) {
+  /** Persist the chosen (and possibly edited) colour palette into brand_data. */
+  async function commitColor(palette: Swatch[]) {
     setBusy(true);
-    setColorPaletteId(id);
-    const b = rebuild(items, refLen, { ...currentExtras(), colorPaletteId: id });
+    setColorPalette(palette);
+    const b = rebuild(items, refLen, { ...currentExtras(), colorPalette: palette });
     setBd(b);
     await persistBrand(b);
     setBusy(false);
@@ -677,10 +678,11 @@ export function SessionFlow({
       <div>
         {topBar}
         <ColorPicker
-          selected={colorPaletteId}
-          onChange={setColorPaletteId}
+          colors={colorPalette}
+          onChange={setColorPalette}
+          projectId={projectId}
           onComplete={async () => {
-            if (colorPaletteId) await commitColor(colorPaletteId);
+            if (colorPalette.length) await commitColor(colorPalette);
             setPhase(!logoDone ? "logo" : "done");
           }}
           onBack={() => setPhase("scope")}
