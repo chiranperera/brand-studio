@@ -28,18 +28,48 @@ function ChipGroup({
   selected: string[];
   onToggle: (o: string) => void;
 }) {
+  const [custom, setCustom] = useState("");
+  // Show preset options plus any custom values the host added (selected but not
+  // in the preset list), so custom tags render as chips and can be toggled off.
+  const all = [...options, ...selected.filter((s) => !options.includes(s))];
+
+  function add() {
+    const v = custom.trim();
+    if (v && !selected.includes(v)) onToggle(v);
+    setCustom("");
+  }
+
   return (
-    <div className="flex flex-wrap gap-2">
-      {options.map((o) => (
-        <button
-          key={o}
-          type="button"
-          className={`chip ${selected.includes(o) ? "chip-on" : ""}`}
-          onClick={() => onToggle(o)}
-        >
-          {o}
+    <div className="space-y-2">
+      <div className="flex flex-wrap gap-2">
+        {all.map((o) => (
+          <button
+            key={o}
+            type="button"
+            className={`chip ${selected.includes(o) ? "chip-on" : ""}`}
+            onClick={() => onToggle(o)}
+          >
+            {o}
+          </button>
+        ))}
+      </div>
+      <div className="flex gap-2">
+        <input
+          className="input text-sm"
+          placeholder="Add your own…"
+          value={custom}
+          onChange={(e) => setCustom(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              add();
+            }
+          }}
+        />
+        <button type="button" className="btn-ghost shrink-0" onClick={add}>
+          Add
         </button>
-      ))}
+      </div>
     </div>
   );
 }
