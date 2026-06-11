@@ -147,12 +147,13 @@ export function SessionFlow({
     const it = its[i];
     const ans = isEmpty(it.value) ? null : it.value;
     const actor = lastActor.current;
+    const opts = it.question.options ?? null;
     let id = it.id;
     if (id) {
       const up = { answer: ans as never, note: it.note || null, actor };
       const { error } = await supabase.from("answers").update(up).eq("id", id);
       // Fall back if the `actor` column isn't present yet (migration 0002).
-      if (error && /actor/i.test(error.message)) {
+      if (error && /actor|column|schema/i.test(error.message)) {
         await supabase.from("answers").update({ answer: ans as never, note: it.note || null }).eq("id", id);
       }
     } else {
@@ -167,8 +168,10 @@ export function SessionFlow({
         note: it.note || null,
         position: i,
       };
-      let res = await supabase.from("answers").insert({ ...base, actor }).select("id").single();
-      if (res.error && /actor/i.test(res.error.message)) {
+      // Try with the extra columns (actor + options); fall back if the migrations
+      // (0002/0003) haven't been run yet.
+      let res = await supabase.from("answers").insert({ ...base, actor, options: opts }).select("id").single();
+      if (res.error && /actor|options|column|schema/i.test(res.error.message)) {
         res = await supabase.from("answers").insert(base).select("id").single();
       }
       id = res.data?.id;
@@ -328,9 +331,16 @@ export function SessionFlow({
     setBusy(false);
   }
 
-  function stopLive() {
+  async function stopLive() {
+    // Tell the client the session ended before we tear down the channel.
+    try {
+      await channelRef.current?.send({ type: "broadcast", event: "host_end", payload: {} });
+    } catch {
+      /* ignore */
+    }
     setLive(false);
     setClientName(null);
+    lastStateRef.current = null;
   }
 
   // Track current position for the client-select handler; reset attribution per question.
@@ -479,6 +489,35 @@ export function SessionFlow({
   const current = items[pos];
   const answeredTotal = items.filter((x) => x.id).length;
 
+  function goToPhase(p: Phase) {
+    if (p === "questions" && items.length) setPos(Math.min(posRef.current, items.length - 1));
+    setPhase(p);
+  }
+
+  // Small, subtle top nav to jump between spaces without stepping through each.
+  const phaseNav = (
+    <nav className="mx-auto mb-5 flex max-w-3xl items-center gap-1.5 text-xs text-ink-4">
+      {([
+        ["questions", "Questions"],
+        ["scope", "Scope"],
+        ["logo", "Logo"],
+        ["done", "Done"],
+      ] as [Phase, string][]).map(([p, label], i) => (
+        <span key={p} className="flex items-center gap-1.5">
+          {i > 0 && <span aria-hidden>·</span>}
+          <button
+            onClick={() => goToPhase(p)}
+            className={`rounded px-1 py-0.5 transition-colors ${
+              phase === p ? "text-accent" : "hover:text-ink-2"
+            }`}
+          >
+            {label}
+          </button>
+        </span>
+      ))}
+    </nav>
+  );
+
   const refPanel = (
     <div className="card">
       <div className="mb-1 flex items-center justify-between">
@@ -497,43 +536,51 @@ export function SessionFlow({
   // Space 2.5: scope & build requirements (sections + AI automation).
   if (phase === "scope") {
     return (
-      <ScopePicker
-        data={scopeData}
-        onChange={setScopeData}
-        projectId={projectId}
-        onComplete={async (d) => {
-          await commitScope(d);
-          setPhase(logoDone ? "done" : "logo");
-        }}
-        onBack={() => {
-          setPhase("questions");
-          if (items.length) setPos(items.length - 1);
-        }}
-        busy={busy}
-      />
+      <div>
+        {phaseNav}
+        <ScopePicker
+          data={scopeData}
+          onChange={setScopeData}
+          projectId={projectId}
+          onComplete={async (d) => {
+            await commitScope(d);
+            setPhase(logoDone ? "done" : "logo");
+          }}
+          onBack={() => {
+            setPhase("questions");
+            if (items.length) setPos(items.length - 1);
+          }}
+          busy={busy}
+        />
+      </div>
     );
   }
 
   // Space 3: the visual logo-type picker.
   if (phase === "logo") {
     return (
-      <LogoTypePicker
-        selected={logoTypes}
-        onChange={setLogoTypes}
-        page={logoPage}
-        setPage={setLogoPage}
-        onComplete={async () => {
-          await commitLogo(logoTypes);
-          setPhase("done");
-        }}
-        onBack={() => setPhase("scope")}
-        busy={busy}
-      />
+      <div>
+        {phaseNav}
+        <LogoTypePicker
+          selected={logoTypes}
+          onChange={setLogoTypes}
+          page={logoPage}
+          setPage={setLogoPage}
+          onComplete={async () => {
+            await commitLogo(logoTypes);
+            setPhase("done");
+          }}
+          onBack={() => setPhase("scope")}
+          busy={busy}
+        />
+      </div>
     );
   }
 
   return (
-    <div className="grid gap-6 md:grid-cols-[1fr_280px]">
+    <div>
+      {phaseNav}
+      <div className="grid gap-6 md:grid-cols-[1fr_280px]">
       <div className="space-y-4">
         {error && (
           <div className="card border-red-500/40 text-sm text-red-300">
@@ -636,16 +683,6 @@ export function SessionFlow({
       </div>
 
       <div className="space-y-4 md:sticky md:top-20 md:h-fit">
-        <LivePanel
-          live={live}
-          joinUrl={joinCode && typeof window !== "undefined" ? `${window.location.origin}/join/${joinCode}` : null}
-          clientName={clientName}
-          onGoLive={goLive}
-          onStop={stopLive}
-          busy={busy}
-        />
-        <ProgressRail score={score} missing={missing} answered={answeredTotal} />
-
         {items.length > 0 && (
           <nav className="card max-h-[50vh] overflow-auto">
             <span className="label">Jump to question</span>
@@ -676,6 +713,18 @@ export function SessionFlow({
             </ol>
           </nav>
         )}
+
+        <ProgressRail score={score} missing={missing} answered={answeredTotal} />
+
+        <LivePanel
+          live={live}
+          joinUrl={joinCode && typeof window !== "undefined" ? `${window.location.origin}/join/${joinCode}` : null}
+          clientName={clientName}
+          onGoLive={goLive}
+          onStop={stopLive}
+          busy={busy}
+        />
+      </div>
       </div>
     </div>
   );

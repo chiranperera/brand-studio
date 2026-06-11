@@ -5,12 +5,14 @@ import { createClient } from "@/lib/supabase/client";
 import { liveChannel, type HostState, type LiveValue, type ScopeKey } from "@/lib/live";
 import { LOGO_TYPES } from "@/lib/logo-types";
 import { WEBSITE_SECTIONS, WEBSITE_FEATURES, AUTOMATION_NEEDS, SURFACE_KINDS } from "@/lib/scope-options";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 
 export function LiveClient({ code }: { code: string }) {
   const [name, setName] = useState("");
   const [joined, setJoined] = useState(false);
   const [connected, setConnected] = useState(false);
+  const [ended, setEnded] = useState(false);
   const [state, setState] = useState<HostState | null>(null);
   const [value, setValue] = useState<LiveValue>("");
   const [other, setOther] = useState("");
@@ -36,6 +38,12 @@ export function LiveClient({ code }: { code: string }) {
     const ch = supabase.channel(liveChannel(code), { config: { presence: { key: `client-${Math.floor(Date.now() % 1e6)}` } } });
     channelRef.current = ch;
     ch.on("broadcast", { event: "host_state" }, ({ payload }) => setState(payload as HostState));
+    ch.on("broadcast", { event: "host_end" }, () => {
+      setEnded(true);
+      setConnected(false);
+      setState(null);
+      void supabase.removeChannel(ch);
+    });
     ch.subscribe((status) => {
       if (status === "SUBSCRIBED") {
         setConnected(true);
@@ -77,9 +85,26 @@ export function LiveClient({ code }: { code: string }) {
     void channelRef.current?.send({ type: "broadcast", event: "client_scope", payload: { key, value } });
   }
 
+  if (ended) {
+    return (
+      <main className="relative flex min-h-screen items-center justify-center px-6">
+        <div className="absolute right-5 top-5">
+          <ThemeToggle />
+        </div>
+        <div className="card max-w-sm text-center">
+          <h1 className="text-xl font-medium">Session ended</h1>
+          <p className="mt-2 text-sm text-ink-3">Your designer has ended the live session. Thank you!</p>
+        </div>
+      </main>
+    );
+  }
+
   if (!joined) {
     return (
-      <main className="flex min-h-screen items-center justify-center px-6">
+      <main className="relative flex min-h-screen items-center justify-center px-6">
+        <div className="absolute right-5 top-5">
+          <ThemeToggle />
+        </div>
         <div className="w-full max-w-sm text-center">
           <div className="mono text-xs uppercase tracking-widest text-ink-3">Discovery Studio · Live</div>
           <h1 className="mt-2 text-2xl font-semibold">Join the session</h1>
@@ -103,10 +128,13 @@ export function LiveClient({ code }: { code: string }) {
     <main className="mx-auto max-w-lg px-6 py-8">
       <div className="mb-6 flex items-center justify-between text-xs text-ink-3">
         <span className="mono uppercase tracking-widest">Live session</span>
-        <span className="flex items-center gap-2">
-          <span className={`h-2 w-2 rounded-full ${connected ? "bg-accent" : "bg-ink-4"}`} />
-          {connected ? "Connected" : "Connecting…"}
-        </span>
+        <div className="flex items-center gap-3">
+          <span className="flex items-center gap-2">
+            <span className={`h-2 w-2 rounded-full ${connected ? "bg-accent" : "bg-ink-4"}`} />
+            {connected ? "Connected" : "Connecting…"}
+          </span>
+          <ThemeToggle />
+        </div>
       </div>
 
       {!state ? (

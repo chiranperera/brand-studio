@@ -43,24 +43,36 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
     session = created!;
   }
 
-  const { data: answerRows } = await supabase
+  const baseCols = "id, field_path, section, question, input_type, answer, note, position";
+  let answerRows: Record<string, unknown>[] | null = null;
+  const withOpts = await supabase
     .from("answers")
-    .select("id, field_path, section, question, input_type, answer, note, position")
+    .select(`${baseCols}, options`)
     .eq("project_id", id)
     .order("position", { ascending: true });
+  if (withOpts.error) {
+    // Fall back if the `options` column (migration 0003) isn't present yet.
+    const r = await supabase.from("answers").select(baseCols).eq("project_id", id).order("position", { ascending: true });
+    answerRows = (r.data as Record<string, unknown>[] | null) ?? null;
+  } else {
+    answerRows = (withOpts.data as Record<string, unknown>[] | null) ?? null;
+  }
 
-  const initialAnswers: InitialAnswer[] = (answerRows ?? []).map((a) => ({
-    id: a.id as string,
-    question: {
-      section: a.section ?? "",
-      question: a.question as string,
-      inputType: (a.input_type as InputType) ?? "text",
-      field: a.field_path ?? undefined,
-      options: [],
-    } satisfies Question,
-    value: toValue(a.answer),
-    note: a.note ?? "",
-  }));
+  const initialAnswers: InitialAnswer[] = (answerRows ?? []).map((a) => {
+    const row = a as Record<string, unknown>;
+    return {
+      id: row.id as string,
+      question: {
+        section: (row.section as string) ?? "",
+        question: row.question as string,
+        inputType: (row.input_type as InputType) ?? "text",
+        field: (row.field_path as string) ?? undefined,
+        options: (row.options as string[] | null) ?? [], // restored so all options reappear on resume
+      } satisfies Question,
+      value: toValue(row.answer),
+      note: (row.note as string) ?? "",
+    };
+  });
 
   const { data: assets } = await supabase
     .from("assets")
