@@ -10,6 +10,7 @@ import { computeCompleteness, emptyBrandData, type BrandDataObject, type LogoTyp
 import { QuestionCard } from "./QuestionCard";
 import { LogoTypePicker } from "./LogoTypePicker";
 import { ScopePicker, type ScopeData } from "./ScopePicker";
+import { DeliverablesGallery } from "./DeliverablesGallery";
 import { ColorPicker, type Swatch, type SavedPalette } from "./ColorPicker";
 import { TypePicker } from "./TypePicker";
 import { LivePanel } from "./LivePanel";
@@ -29,7 +30,7 @@ import {
 import type { RealtimeChannel } from "@supabase/supabase-js";
 import type { AnswerVal } from "./InputArea";
 
-type Phase = "questions" | "scope" | "color" | "type" | "logo" | "done";
+type Phase = "questions" | "scope" | "deliverables" | "color" | "type" | "logo" | "done";
 type Surface = { kind: string; screens: string[]; components: string[] };
 type Automation = BrandDataObject["automation"];
 
@@ -241,13 +242,15 @@ export function SessionFlow({
   }
 
   const scopeDone = surfaces.length > 0 && automation.needs.length > 0;
+  const deliverablesDone = scopeData.deliverables.length > 0;
   const colorDone = colorPalette.length > 0;
   const typeDone = !!typeDisplay;
   const logoDone = logoTypes.length > 0;
 
-  /** Next unfinished space, in order: scope → colour → type → logo → done. */
+  /** Next unfinished space, in order: scope → deliverables → colour → type → logo → done. */
   function nextPhase(): Phase {
     if (!scopeDone) return "scope";
+    if (!deliverablesDone) return "deliverables";
     if (!colorDone) return "color";
     if (!typeDone) return "type";
     if (!logoDone) return "logo";
@@ -550,6 +553,8 @@ export function SessionFlow({
         },
         title: "Scope & requirements",
       };
+    } else if (phase === "deliverables") {
+      state = { kind: "done", title: "Choosing what we design" };
     } else if (phase === "color") {
       // Live colour-sync is the next increment; show a follow-along placeholder.
       state = { kind: "done", title: "Choosing the colour palette" };
@@ -628,6 +633,7 @@ export function SessionFlow({
       {([
         ["questions", "Questions"],
         ["scope", "Scope"],
+        ["deliverables", "Deliverables"],
         ["color", "Colour"],
         ["type", "Type"],
         ["logo", "Logo"],
@@ -724,7 +730,7 @@ export function SessionFlow({
           palette={colorPalette}
           onComplete={async (d) => {
             await commitScope(d);
-            setPhase(!colorDone ? "color" : !logoDone ? "logo" : "done");
+            setPhase("deliverables");
           }}
           onBack={() => {
             setPhase("questions");
@@ -732,6 +738,49 @@ export function SessionFlow({
           }}
           busy={busy}
         />
+      </div>
+    );
+  }
+
+  // Dedicated deliverables space — what we can design & deliver.
+  if (phase === "deliverables") {
+    const toggleDeliverable = (name: string) =>
+      setScopeData((s) => ({
+        ...s,
+        deliverables: s.deliverables.includes(name)
+          ? s.deliverables.filter((x) => x !== name)
+          : [...s.deliverables, name],
+      }));
+    return (
+      <div>
+        {topBar}
+        <div className="mx-auto max-w-3xl space-y-5">
+          <div className="text-center">
+            <div className="mono text-xs uppercase tracking-widest text-ink-3">Deliverables</div>
+            <h1 className="mt-2 text-3xl font-semibold">What can we design &amp; deliver?</h1>
+            <p className="mt-1 text-sm text-ink-3">
+              Browse by category — each component shows what it looks like in the brand&apos;s colours. Tap what the
+              client wants.
+            </p>
+          </div>
+          <DeliverablesGallery selected={scopeData.deliverables} onToggle={toggleDeliverable} palette={colorPalette} />
+          <div className="flex items-center justify-between">
+            <button className="btn-ghost" onClick={() => setPhase("scope")} disabled={busy}>
+              ← Back
+            </button>
+            <span className="text-sm text-ink-3">{scopeData.deliverables.length} selected</span>
+            <button
+              className="btn-primary"
+              disabled={busy}
+              onClick={async () => {
+                await commitScope(scopeData);
+                setPhase(!colorDone ? "color" : !typeDone ? "type" : !logoDone ? "logo" : "done");
+              }}
+            >
+              {busy ? "Saving…" : "Continue →"}
+            </button>
+          </div>
+        </div>
       </div>
     );
   }
@@ -849,6 +898,9 @@ export function SessionFlow({
                 </button>
                 <button className="btn-ghost" onClick={() => setPhase("scope")}>
                   Scope
+                </button>
+                <button className="btn-ghost" onClick={() => setPhase("deliverables")}>
+                  Deliverables
                 </button>
                 <button className="btn-ghost" onClick={() => setPhase("color")}>
                   Colour

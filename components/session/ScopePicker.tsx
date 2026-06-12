@@ -8,7 +8,6 @@ import {
   AUTOMATION_NEEDS,
   AUTOMATION_LEVELS,
 } from "@/lib/scope-options";
-import { DeliverablesGallery } from "./DeliverablesGallery";
 
 export interface ScopeData {
   kinds: string[];
@@ -228,17 +227,6 @@ export function ScopePicker({
             placeholder="Optional"
           />
         </div>
-      </div>
-
-      <div className="card">
-        <div className="mb-3">
-          <h2 className="font-medium">What can we design &amp; deliver for you?</h2>
-          <p className="text-sm text-ink-3">
-            Browse by category and tap what the client wants — each shows what it looks like in their colours. We design
-            it all (and deliver print-ready files).
-          </p>
-        </div>
-        <DeliverablesGallery selected={d.deliverables} onToggle={toggle("deliverables")} palette={palette} />
       </div>
 
       <div className="flex items-center justify-between">

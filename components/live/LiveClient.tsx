@@ -5,7 +5,6 @@ import { createClient } from "@/lib/supabase/client";
 import { liveChannel, type HostState, type LiveValue, type ScopeKey } from "@/lib/live";
 import { LOGO_TYPES } from "@/lib/logo-types";
 import { WEBSITE_SECTIONS, WEBSITE_FEATURES, AUTOMATION_NEEDS, SURFACE_KINDS, AUTOMATION_LEVELS } from "@/lib/scope-options";
-import { DeliverablesGallery } from "@/components/session/DeliverablesGallery";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 
@@ -410,11 +409,6 @@ function ClientScope({
           onToggle={(v) => onToggle(g.key, v)}
         />
       ))}
-
-      <div className="card">
-        <span className="label">What can we design &amp; deliver?</span>
-        <DeliverablesGallery selected={scope.deliverables} onToggle={(name) => onToggle("deliverables", name)} />
-      </div>
 
       <div className="card">
         <span className="label">How much automation?</span>
