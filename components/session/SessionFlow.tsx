@@ -696,6 +696,7 @@ export function SessionFlow({
           data={scopeData}
           onChange={setScopeData}
           projectId={projectId}
+          palette={colorPalette}
           onComplete={async (d) => {
             await commitScope(d);
             setPhase(!colorDone ? "color" : !logoDone ? "logo" : "done");

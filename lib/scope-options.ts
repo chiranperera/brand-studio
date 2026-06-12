@@ -65,46 +65,6 @@ export const AUTOMATION_LEVELS = [
   "Autonomous agent — decides & acts within limits, you oversee",
 ];
 
-/**
- * The agency's design-deliverables menu — what we can DESIGN & deliver (we don't
- * print). Grouped to educate the client on the full range. Grounded in 2026
- * agency service menus.
- */
-export const DELIVERABLE_GROUPS: { label: string; options: string[] }[] = [
-  {
-    label: "Brand identity",
-    options: ["Logo suite", "Brand guidelines", "Business cards & stationery", "Icon / pattern set", "Brand collateral"],
-  },
-  {
-    label: "Web & app",
-    options: ["Website design", "Landing pages", "Web app UI", "Mobile app UI", "Design system / UI kit"],
-  },
-  {
-    label: "Social media",
-    options: [
-      "Social media kit (profiles & banners)",
-      "Post & story templates",
-      "Social media creatives",
-      "Display / banner ads",
-    ],
-  },
-  {
-    label: "Email & marketing",
-    options: ["Email templates / newsletters", "Email campaign design", "Marketing campaign assets", "Ad creatives"],
-  },
-  {
-    label: "Presentations & docs",
-    options: ["Pitch / sales deck", "Reports & one-pagers", "Infographics"],
-  },
-  {
-    label: "Print-ready design (we design, you print)",
-    options: ["Brochure / flyer", "Poster", "Packaging", "Menu", "Signage"],
-  },
-  {
-    label: "Motion & video",
-    options: ["Motion graphics", "Reels / video templates"],
-  },
-];
-
-/** Flat list of every deliverable, for validation/suggestions. */
-export const ALL_DELIVERABLES = DELIVERABLE_GROUPS.flatMap((g) => g.options);
+// The deliverables catalog lives in lib/deliverables.ts (with mockups). Re-export
+// the flat name list for the suggestion route's validation.
+export { ALL_DELIVERABLES } from "./deliverables";

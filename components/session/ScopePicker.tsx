@@ -7,8 +7,8 @@ import {
   WEBSITE_FEATURES,
   AUTOMATION_NEEDS,
   AUTOMATION_LEVELS,
-  DELIVERABLE_GROUPS,
 } from "@/lib/scope-options";
+import { DeliverablesGallery } from "./DeliverablesGallery";
 
 export interface ScopeData {
   kinds: string[];
@@ -82,6 +82,7 @@ export function ScopePicker({
   data,
   onChange,
   projectId,
+  palette,
   onComplete,
   onBack,
   busy,
@@ -89,6 +90,7 @@ export function ScopePicker({
   data: ScopeData; // controlled by parent so it can be broadcast live
   onChange: (d: ScopeData) => void;
   projectId: string;
+  palette?: { hex: string; role: string }[];
   onComplete: (d: ScopeData) => void;
   onBack: () => void;
   busy: boolean;
@@ -228,20 +230,15 @@ export function ScopePicker({
         </div>
       </div>
 
-      <div className="card space-y-4">
-        <div>
+      <div className="card">
+        <div className="mb-3">
           <h2 className="font-medium">What can we design &amp; deliver for you?</h2>
           <p className="text-sm text-ink-3">
-            Everything we can design (we don&apos;t print, but we deliver print-ready files). Pick anything the client
-            might want.
+            Browse by category and tap what the client wants — each shows what it looks like in their colours. We design
+            it all (and deliver print-ready files).
           </p>
         </div>
-        {DELIVERABLE_GROUPS.map((g) => (
-          <div key={g.label}>
-            <span className="label">{g.label}</span>
-            <ChipGroup options={g.options} selected={d.deliverables} onToggle={toggle("deliverables")} />
-          </div>
-        ))}
+        <DeliverablesGallery selected={d.deliverables} onToggle={toggle("deliverables")} palette={palette} />
       </div>
 
       <div className="flex items-center justify-between">
