@@ -247,13 +247,13 @@ export function SessionFlow({
   const typeDone = !!typeDisplay;
   const logoDone = logoTypes.length > 0;
 
-  /** Next unfinished space, in order: scope → deliverables → colour → type → logo → done. */
+  /** Next unfinished space, in order: scope → logo → colour → type → deliverables → done. */
   function nextPhase(): Phase {
     if (!scopeDone) return "scope";
-    if (!deliverablesDone) return "deliverables";
+    if (!logoDone) return "logo";
     if (!colorDone) return "color";
     if (!typeDone) return "type";
-    if (!logoDone) return "logo";
+    if (!deliverablesDone) return "deliverables";
     return "done";
   }
 
@@ -633,10 +633,10 @@ export function SessionFlow({
       {([
         ["questions", "Questions"],
         ["scope", "Scope"],
-        ["deliverables", "Deliverables"],
+        ["logo", "Logo"],
         ["color", "Colour"],
         ["type", "Type"],
-        ["logo", "Logo"],
+        ["deliverables", "Deliverables"],
         ["done", "Done"],
       ] as [Phase, string][]).map(([p, label], i) => (
         <span key={p} className="flex items-center gap-1.5">
@@ -730,7 +730,7 @@ export function SessionFlow({
           palette={colorPalette}
           onComplete={async (d) => {
             await commitScope(d);
-            setPhase("deliverables");
+            setPhase("logo");
           }}
           onBack={() => {
             setPhase("questions");
@@ -765,7 +765,7 @@ export function SessionFlow({
           </div>
           <DeliverablesGallery selected={scopeData.deliverables} onToggle={toggleDeliverable} palette={colorPalette} />
           <div className="flex items-center justify-between">
-            <button className="btn-ghost" onClick={() => setPhase("scope")} disabled={busy}>
+            <button className="btn-ghost" onClick={() => setPhase("type")} disabled={busy}>
               ← Back
             </button>
             <span className="text-sm text-ink-3">{scopeData.deliverables.length} selected</span>
@@ -774,7 +774,7 @@ export function SessionFlow({
               disabled={busy}
               onClick={async () => {
                 await commitScope(scopeData);
-                setPhase(!colorDone ? "color" : !typeDone ? "type" : !logoDone ? "logo" : "done");
+                setPhase("done");
               }}
             >
               {busy ? "Saving…" : "Continue →"}
@@ -803,9 +803,9 @@ export function SessionFlow({
           projectId={projectId}
           onComplete={async () => {
             if (colorPalette.length) await commitColor(colorPalette);
-            setPhase(!typeDone ? "type" : !logoDone ? "logo" : "done");
+            setPhase("type");
           }}
-          onBack={() => setPhase("scope")}
+          onBack={() => setPhase("logo")}
           busy={busy}
         />
       </div>
@@ -824,7 +824,7 @@ export function SessionFlow({
           onBody={setTypeBody}
           onComplete={async () => {
             await commitType(typeDisplay, typeBody);
-            setPhase(!logoDone ? "logo" : "done");
+            setPhase("deliverables");
           }}
           onBack={() => setPhase("color")}
           busy={busy}
@@ -845,9 +845,9 @@ export function SessionFlow({
           setPage={setLogoPage}
           onComplete={async () => {
             await commitLogo(logoTypes);
-            setPhase("done");
+            setPhase("color");
           }}
-          onBack={() => setPhase("type")}
+          onBack={() => setPhase("scope")}
           busy={busy}
         />
       </div>
@@ -899,8 +899,8 @@ export function SessionFlow({
                 <button className="btn-ghost" onClick={() => setPhase("scope")}>
                   Scope
                 </button>
-                <button className="btn-ghost" onClick={() => setPhase("deliverables")}>
-                  Deliverables
+                <button className="btn-ghost" onClick={() => setPhase("logo")}>
+                  Logo
                 </button>
                 <button className="btn-ghost" onClick={() => setPhase("color")}>
                   Colour
@@ -908,8 +908,8 @@ export function SessionFlow({
                 <button className="btn-ghost" onClick={() => setPhase("type")}>
                   Type
                 </button>
-                <button className="btn-ghost" onClick={() => setPhase("logo")}>
-                  Logo types
+                <button className="btn-ghost" onClick={() => setPhase("deliverables")}>
+                  Deliverables
                 </button>
                 <Link className="btn-primary" href={`/projects/${projectId}/export`}>
                   Export Design Pack
