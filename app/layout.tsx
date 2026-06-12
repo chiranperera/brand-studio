@@ -14,6 +14,13 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en" suppressHydrationWarning>
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
+        {/* Fonts for the type-specimen picker */}
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        <link
+          href="https://fonts.googleapis.com/css2?family=Anton&family=Fraunces:wght@600&family=JetBrains+Mono:wght@500&family=Poppins:wght@600&family=Quicksand:wght@600&family=Space+Grotesk:wght@600&display=swap"
+          rel="stylesheet"
+        />
       </head>
       <body>{children}</body>
     </html>

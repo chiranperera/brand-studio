@@ -53,11 +53,9 @@ export const ASK_POOL: string[] = [
   "voice.person",
   "voice.emoji",
   "logo.notes",
-  // Colour, type & imagery
+  // Colour, type & imagery (type.displayFeel/bodyFeel captured by the type picker)
   "color.direction",
   "color.lightDark",
-  "type.displayFeel",
-  "type.bodyFeel",
   "visualStyle.cluster",
   "visualStyle.moodWords",
   "imagery.mode",
@@ -83,7 +81,7 @@ export const REQUIRED_GROUPS: string[][] = [
   // logo.preferredTypes is captured by the visual logo-type picker after the
   // questions (see LogoTypePicker), so it's not asked as a text question here.
   ["color.direction", "color.locked"],
-  ["type.displayFeel"],
+  // type.displayFeel is captured by the visual type-specimen picker.
   ["visualStyle.cluster"],
   ["imagery.mode"],
   // surfaces + AI automation are captured by the Scope step (see ScopePicker),

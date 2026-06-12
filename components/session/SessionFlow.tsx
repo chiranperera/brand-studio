@@ -11,6 +11,7 @@ import { QuestionCard } from "./QuestionCard";
 import { LogoTypePicker } from "./LogoTypePicker";
 import { ScopePicker, type ScopeData } from "./ScopePicker";
 import { ColorPicker, type Swatch, type SavedPalette } from "./ColorPicker";
+import { TypePicker } from "./TypePicker";
 import { LivePanel } from "./LivePanel";
 import { ReferenceUpload } from "@/components/projects/ReferenceUpload";
 import {
@@ -28,7 +29,7 @@ import {
 import type { RealtimeChannel } from "@supabase/supabase-js";
 import type { AnswerVal } from "./InputArea";
 
-type Phase = "questions" | "scope" | "color" | "logo" | "done";
+type Phase = "questions" | "scope" | "color" | "type" | "logo" | "done";
 type Surface = { kind: string; screens: string[]; components: string[] };
 type Automation = BrandDataObject["automation"];
 
@@ -94,6 +95,8 @@ export function SessionFlow({
   const [savedPalettes, setSavedPalettes] = useState<SavedPalette[]>(
     (initialBrandData.color?.savedPalettes as SavedPalette[]) ?? []
   );
+  const [typeDisplay, setTypeDisplay] = useState<string>(initialBrandData.type?.displayFeel ?? "");
+  const [typeBody, setTypeBody] = useState<string>(initialBrandData.type?.bodyFeel ?? "");
   const [surfaces, setSurfaces] = useState<Surface[]>(initialBrandData.surfaces ?? []);
   const [automation, setAutomation] = useState<Automation>(
     initialBrandData.automation ?? { needs: [], workflows: [] }
@@ -136,6 +139,8 @@ export function SessionFlow({
     paletteName: string;
     savedPalettes: SavedPalette[];
     deliverables: string[];
+    typeDisplay: string;
+    typeBody: string;
   }
 
   /** Rebuild brand_data by replaying every persisted answer (order-independent, edit-safe). */
@@ -151,6 +156,8 @@ export function SessionFlow({
     b.surfaces = extra.surfaces; // scope picker
     b.automation = extra.automation; // scope picker
     b.deliverables = extra.deliverables; // deliverables menu
+    if (extra.typeDisplay) b.type = { ...b.type, displayFeel: extra.typeDisplay }; // type picker
+    if (extra.typeBody) b.type = { ...b.type, bodyFeel: extra.typeBody };
     b.color = { ...b.color, savedPalettes: extra.savedPalettes }; // designer's named palettes
     if (extra.colorPalette.length) {
       // colour picker (editable + named)
@@ -178,6 +185,8 @@ export function SessionFlow({
     paletteName,
     savedPalettes,
     deliverables,
+    typeDisplay,
+    typeBody,
   });
 
   /** Persist item `i` (insert or update), rebuild brand_data, return the updated items. */
@@ -233,12 +242,14 @@ export function SessionFlow({
 
   const scopeDone = surfaces.length > 0 && automation.needs.length > 0;
   const colorDone = colorPalette.length > 0;
+  const typeDone = !!typeDisplay;
   const logoDone = logoTypes.length > 0;
 
-  /** Next unfinished space, in order: scope → colour → logo → done. */
+  /** Next unfinished space, in order: scope → colour → type → logo → done. */
   function nextPhase(): Phase {
     if (!scopeDone) return "scope";
     if (!colorDone) return "color";
+    if (!typeDone) return "type";
     if (!logoDone) return "logo";
     return "done";
   }
@@ -303,6 +314,17 @@ export function SessionFlow({
     const b = rebuild(items, refLen, { ...currentExtras(), savedPalettes: next, paletteName: name });
     setBd(b);
     await persistBrand(b);
+  }
+
+  /** Persist the typography feel into brand_data. */
+  async function commitType(displayFeel: string, bodyFeel: string) {
+    setBusy(true);
+    setTypeDisplay(displayFeel);
+    setTypeBody(bodyFeel);
+    const b = rebuild(items, refLen, { ...currentExtras(), typeDisplay: displayFeel, typeBody: bodyFeel });
+    setBd(b);
+    await persistBrand(b);
+    setBusy(false);
   }
 
   /** Persist the logo-type selection into brand_data. */
@@ -531,6 +553,8 @@ export function SessionFlow({
     } else if (phase === "color") {
       // Live colour-sync is the next increment; show a follow-along placeholder.
       state = { kind: "done", title: "Choosing the colour palette" };
+    } else if (phase === "type") {
+      state = { kind: "done", title: "Choosing the typography" };
     } else {
       state = { kind: "done", title: "Session complete" };
     }
@@ -605,6 +629,7 @@ export function SessionFlow({
         ["questions", "Questions"],
         ["scope", "Scope"],
         ["color", "Colour"],
+        ["type", "Type"],
         ["logo", "Logo"],
         ["done", "Done"],
       ] as [Phase, string][]).map(([p, label], i) => (
@@ -729,9 +754,30 @@ export function SessionFlow({
           projectId={projectId}
           onComplete={async () => {
             if (colorPalette.length) await commitColor(colorPalette);
-            setPhase(!logoDone ? "logo" : "done");
+            setPhase(!typeDone ? "type" : !logoDone ? "logo" : "done");
           }}
           onBack={() => setPhase("scope")}
+          busy={busy}
+        />
+      </div>
+    );
+  }
+
+  // Typography specimen picker.
+  if (phase === "type") {
+    return (
+      <div>
+        {topBar}
+        <TypePicker
+          display={typeDisplay}
+          body={typeBody}
+          onDisplay={setTypeDisplay}
+          onBody={setTypeBody}
+          onComplete={async () => {
+            await commitType(typeDisplay, typeBody);
+            setPhase(!logoDone ? "logo" : "done");
+          }}
+          onBack={() => setPhase("color")}
           busy={busy}
         />
       </div>
@@ -752,7 +798,7 @@ export function SessionFlow({
             await commitLogo(logoTypes);
             setPhase("done");
           }}
-          onBack={() => setPhase("color")}
+          onBack={() => setPhase("type")}
           busy={busy}
         />
       </div>
@@ -806,6 +852,9 @@ export function SessionFlow({
                 </button>
                 <button className="btn-ghost" onClick={() => setPhase("color")}>
                   Colour
+                </button>
+                <button className="btn-ghost" onClick={() => setPhase("type")}>
+                  Type
                 </button>
                 <button className="btn-ghost" onClick={() => setPhase("logo")}>
                   Logo types
